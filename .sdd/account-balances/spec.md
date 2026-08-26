@@ -122,7 +122,7 @@ mutation-currency gap this domain fixes).
 #### Scenario: Non-MXN credit is converted before applying
 - GIVEN a known account with an MXN balance
 - WHEN a credit request arrives with `currency: "USD"` and a positive amount
-- THEN the amount is converted to MXN at the current Banxico rate before the ledger entry is created and the balance is updated
+- THEN the amount is converted to MXN using the static rate table before the ledger entry is created and the balance is updated
 - AND the ledger entry records the original amount, original currency, and the exact rate used
 
 #### Scenario: MXN request applies with no conversion
