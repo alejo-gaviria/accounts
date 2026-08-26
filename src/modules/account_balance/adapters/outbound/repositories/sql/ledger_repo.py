@@ -34,16 +34,7 @@ class SqlLedgerRepository(LedgerRepository):
         self._logger = logger
 
     async def append(self, entry: LedgerEntry) -> None:
-        row = LedgerEntryRow(
-            id=entry.id,
-            account_id=entry.account_id,
-            entry_type=entry.entry_type.value,
-            amount=entry.amount.amount,
-            currency=entry.amount.currency,
-            balance_after=entry.balance_after,
-            idempotency_key=entry.idempotency_key,
-            transfer_id=entry.transfer_id,
-        )
+        row = LedgerEntryRow.from_domain(entry)
         self._session.add(row)
         try:
             # flush (not commit) - stays inside the caller's transaction;
@@ -92,4 +83,7 @@ class SqlLedgerRepository(LedgerRepository):
             idempotency_key=row.idempotency_key,
             transfer_id=row.transfer_id,
             created_at=row.created_at,
+            original_amount=row.original_amount,
+            original_currency=row.original_currency,
+            fx_rate=row.fx_rate,
         )

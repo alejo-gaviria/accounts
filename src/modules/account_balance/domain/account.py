@@ -19,7 +19,7 @@ from src.modules.account_balance.domain.money import Money
 @dataclass
 class Account:
     id: UUID = field(default_factory=uuid4)
-    currency: str = "USD"
+    currency: str = "MXN"
     balance: Decimal = Decimal("0")
     version: int = 0
 
@@ -39,7 +39,17 @@ class Account:
         money: Money,
         idempotency_key: str,
         transfer_id: UUID | None = None,
+        original_amount: Decimal | None = None,
+        original_currency: str = "MXN",
+        fx_rate: Decimal = Decimal("1"),
     ) -> LedgerEntry:
+        # original_amount/original_currency/fx_rate are audit-only
+        # (design.md "Currency Conversion") - this method doesn't
+        # perform or know about any conversion itself, it just threads
+        # through whatever the caller already computed (see
+        # application/use_cases/credit.py). Left at their defaults,
+        # this behaves exactly as before conversion existed: the
+        # ledger row simply records that no conversion happened.
         new_balance = self.balance + money.amount
         entry = LedgerEntry(
             account_id=self.id,
@@ -48,6 +58,9 @@ class Account:
             balance_after=new_balance,
             idempotency_key=idempotency_key,
             transfer_id=transfer_id,
+            original_amount=original_amount if original_amount is not None else money.amount,
+            original_currency=original_currency,
+            fx_rate=fx_rate,
         )
         self.balance = new_balance
         self.version += 1
@@ -58,6 +71,9 @@ class Account:
         money: Money,
         idempotency_key: str,
         transfer_id: UUID | None = None,
+        original_amount: Decimal | None = None,
+        original_currency: str = "MXN",
+        fx_rate: Decimal = Decimal("1"),
     ) -> LedgerEntry:
         new_balance = self.balance - money.amount
         if new_balance < 0:
@@ -70,6 +86,9 @@ class Account:
             balance_after=new_balance,
             idempotency_key=idempotency_key,
             transfer_id=transfer_id,
+            original_amount=original_amount if original_amount is not None else money.amount,
+            original_currency=original_currency,
+            fx_rate=fx_rate,
         )
         self.balance = new_balance
         self.version += 1

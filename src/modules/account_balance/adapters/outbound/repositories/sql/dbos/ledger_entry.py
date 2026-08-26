@@ -19,6 +19,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from src.modules.account_balance.adapters.outbound.repositories.sql.dbos.base import (
     Base,
 )
+from src.modules.account_balance.domain.ledger_entry import LedgerEntry
 
 
 class LedgerEntryRow(Base):
@@ -44,7 +45,20 @@ class LedgerEntryRow(Base):
     )
     entry_type: Mapped[str] = mapped_column(sa.Text, nullable=False)
     amount: Mapped[Decimal] = mapped_column(sa.Numeric(20, 4), nullable=False)
-    currency: Mapped[str] = mapped_column(sa.CHAR(3), nullable=False)
+    currency: Mapped[str] = mapped_column(
+        sa.CHAR(3), nullable=False, server_default="MXN"
+    )
+    # Currency Conversion audit columns (design.md) - what the caller
+    # actually requested, before conversion to the canonical MXN amount
+    # above. fx_rate defaults to 1 (the "no conversion happened" case);
+    # original_amount/original_currency have no DB-level default since
+    # they should always be explicitly supplied by the application
+    # layer (see application/use_cases/{credit,debit,transfer}.py).
+    original_amount: Mapped[Decimal] = mapped_column(sa.Numeric(20, 4), nullable=False)
+    original_currency: Mapped[str] = mapped_column(sa.CHAR(3), nullable=False)
+    fx_rate: Mapped[Decimal] = mapped_column(
+        sa.Numeric(20, 8), nullable=False, server_default="1"
+    )
     balance_after: Mapped[Decimal] = mapped_column(sa.Numeric(20, 4), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(sa.Text, nullable=False)
     transfer_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -53,3 +67,20 @@ class LedgerEntryRow(Base):
     created_at: Mapped[datetime] = mapped_column(
         sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")
     )
+
+    @classmethod
+    def from_domain(cls, entry: LedgerEntry) -> "LedgerEntryRow":
+        """Populate this DBO from a domain LedgerEntry."""
+        return cls(
+            id=entry.id,
+            account_id=entry.account_id,
+            entry_type=entry.entry_type.value,
+            amount=entry.amount.amount,
+            currency=entry.amount.currency,
+            original_amount=entry.original_amount,
+            original_currency=entry.original_currency,
+            fx_rate=entry.fx_rate,
+            balance_after=entry.balance_after,
+            idempotency_key=entry.idempotency_key,
+            transfer_id=entry.transfer_id,
+        )

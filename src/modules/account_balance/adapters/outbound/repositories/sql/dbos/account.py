@@ -19,6 +19,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from src.modules.account_balance.adapters.outbound.repositories.sql.dbos.base import (
     Base,
 )
+from src.modules.account_balance.domain.account import Account
 
 
 class AccountRow(Base):
@@ -33,7 +34,7 @@ class AccountRow(Base):
         server_default=sa.text("gen_random_uuid()"),
     )
     currency: Mapped[str] = mapped_column(
-        sa.CHAR(3), nullable=False, server_default="USD"
+        sa.CHAR(3), nullable=False, server_default="MXN"
     )
     balance: Mapped[Decimal] = mapped_column(
         sa.Numeric(20, 4), nullable=False, server_default="0"
@@ -47,3 +48,13 @@ class AccountRow(Base):
     updated_at: Mapped[datetime] = mapped_column(
         sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")
     )
+
+    @classmethod
+    def from_domain(cls, account: Account) -> "AccountRow":
+        """Populate this DBO from a domain Account aggregate."""
+        return cls(
+            id=account.id,
+            currency=account.currency,
+            balance=account.balance,
+            version=account.version,
+        )

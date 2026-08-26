@@ -23,16 +23,18 @@ class CreateDummyAccountUseCase:
     def __init__(self, uow: UnitOfWork) -> None:
         self._uow = uow
 
-    async def execute(
-        self, currency: str = "USD", initial_balance: Decimal = Decimal("0")
-    ) -> Account:
-        # Account.__post_init__ raises InvalidAmount if initial_balance
-        # < 0 — same error-to-HTTP mapping the router already uses for
+    async def execute(self, initial_balance: Decimal = Decimal("0")) -> Account:
+        # No currency param at all — every account is MXN by
+        # construction now (Account.currency defaults to "MXN"), same
+        # class of decorative-field problem the whole Currency
+        # Conversion capability fixes elsewhere. Account.__post_init__
+        # raises InvalidAmount if initial_balance < 0 — same
+        # error-to-HTTP mapping the router already uses for
         # credit/debit, no separate validation needed here. Id is
         # server-generated (Account's default_factory=uuid4). No
         # locking: this is a brand-new row, not a mutation of an
         # existing one.
-        account = Account(currency=currency, balance=initial_balance)
+        account = Account(balance=initial_balance)
 
         async with self._uow as uow:
             await uow.accounts.create(account)

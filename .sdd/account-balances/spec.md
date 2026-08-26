@@ -103,7 +103,50 @@ Ledger entry insertion and balance projection update MUST occur in one database 
 - WHEN the failure occurs
 - THEN the transaction rolls back entirely — no orphaned ledger entry, no stale balance
 
+## Domain: currency-conversion
+
+**Supersedes the original "single-currency MVP" non-goal below** — the user
+explicitly reopened this after noting `currency` was stored but never
+validated or acted on. Every account balance is now canonically denominated
+in MXN. Requests may arrive in a supported foreign currency; they are
+converted to MXN using a simple static, hardcoded exchange-rate table (no
+external API call) before being applied.
+
+### Requirement: MXN as Canonical Balance Currency
+
+Every account balance MUST be denominated and stored in MXN. Account
+creation MUST NOT accept a currency parameter (removed — it was a
+decorative field with no enforcement, same class of problem as the
+mutation-currency gap this domain fixes).
+
+#### Scenario: Non-MXN credit is converted before applying
+- GIVEN a known account with an MXN balance
+- WHEN a credit request arrives with `currency: "USD"` and a positive amount
+- THEN the amount is converted to MXN at the current Banxico rate before the ledger entry is created and the balance is updated
+- AND the ledger entry records the original amount, original currency, and the exact rate used
+
+#### Scenario: MXN request applies with no conversion
+- GIVEN a known account
+- WHEN a credit/debit/transfer request arrives with `currency: "MXN"`
+- THEN no external rate lookup occurs and the amount is applied as-is
+
+#### Scenario: Transfer between MXN balances never needs conversion
+- GIVEN two known accounts (both MXN-denominated, as all accounts are)
+- WHEN a transfer request is submitted with a non-MXN `currency`
+- THEN the amount is converted to MXN once and both legs apply the same converted MXN amount — no per-leg re-conversion, no mismatch possible (since both accounts share the same canonical currency)
+
+### Requirement: Only Currencies In The Static Table Are Accepted
+
+The system MUST reject a mutation request whose `currency` has no entry in the static exchange-rate table (v1 supported set: MXN, USD, CAD, COP, CNY), rather than silently guessing or defaulting a rate.
+
+#### Scenario: Unsupported currency rejected
+- GIVEN a mutation request with `currency: "EUR"` (or any code outside the v1 supported set)
+- WHEN submitted
+- THEN the request is rejected with an unsupported-currency error and no ledger entry created
+
 ## Non-Goals (out of scope for this spec)
 - No event publication or dual-write to other services in v1.
-- No multi-currency logic (single-currency MVP; `currency` column reserved structurally only).
+- ~~No multi-currency logic (single-currency MVP; `currency` column reserved structurally only).~~ Superseded — see "currency-conversion" domain above.
 - No AWS deployment execution — structure only.
+- No support for currencies outside the v1 static-table set (MXN, USD, CAD, COP, CNY) — adding one is a one-line change to the static table, not automatic for v1.
+- No live/external exchange-rate source — rates are a hardcoded static table, manually updated, not fetched from any API. No historical/point-in-time rate lookups either.

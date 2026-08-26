@@ -42,8 +42,8 @@ from src.modules.account_balance.domain.errors import (
     InsufficientFunds,
     InvalidAmount,
     UnknownAccount,
+    UnsupportedCurrency,
 )
-from src.modules.account_balance.domain.money import Money
 
 router = APIRouter(prefix="/v1")
 
@@ -51,6 +51,7 @@ _DOMAIN_ERROR_HTTP_STATUS = {
     InvalidAmount: (400, "invalid_amount"),
     UnknownAccount: (404, "unknown_account"),
     InsufficientFunds: (409, "insufficient_funds"),
+    UnsupportedCurrency: (400, "unsupported_currency"),
 }
 
 
@@ -79,9 +80,15 @@ async def credit_account(
     ),
 ) -> MutationResponse:
     try:
-        money = Money(body.amount, body.currency)
-        entry = await use_case.execute(account_id, money, idempotency_key)
-    except (InvalidAmount, UnknownAccount, InsufficientFunds) as exc:
+        entry = await use_case.execute(
+            account_id, body.amount, body.currency, idempotency_key
+        )
+    except (
+        InvalidAmount,
+        UnknownAccount,
+        InsufficientFunds,
+        UnsupportedCurrency,
+    ) as exc:
         raise _to_http_error(exc) from exc
     return MutationResponse(
         account_id=account_id, balance=entry.balance_after, entry_id=entry.id
@@ -103,9 +110,15 @@ async def debit_account(
     ),
 ) -> MutationResponse:
     try:
-        money = Money(body.amount, body.currency)
-        entry = await use_case.execute(account_id, money, idempotency_key)
-    except (InvalidAmount, UnknownAccount, InsufficientFunds) as exc:
+        entry = await use_case.execute(
+            account_id, body.amount, body.currency, idempotency_key
+        )
+    except (
+        InvalidAmount,
+        UnknownAccount,
+        InsufficientFunds,
+        UnsupportedCurrency,
+    ) as exc:
         raise _to_http_error(exc) from exc
     return MutationResponse(
         account_id=account_id, balance=entry.balance_after, entry_id=entry.id
@@ -126,14 +139,19 @@ async def create_transfer(
     ),
 ) -> TransferResponse:
     try:
-        money = Money(body.amount, body.currency)
         result = await use_case.execute(
             body.from_account_id,
             body.to_account_id,
-            money,
+            body.amount,
+            body.currency,
             idempotency_key,
         )
-    except (InvalidAmount, UnknownAccount, InsufficientFunds) as exc:
+    except (
+        InvalidAmount,
+        UnknownAccount,
+        InsufficientFunds,
+        UnsupportedCurrency,
+    ) as exc:
         raise _to_http_error(exc) from exc
     return TransferResponse(
         transfer_id=result.transfer_id,
@@ -164,7 +182,7 @@ async def create_dummy_account(
     behavior for a test-seeding helper, not a real business operation.
     """
     try:
-        account = await use_case.execute(body.currency, body.initial_balance)
+        account = await use_case.execute(body.initial_balance)
     except InvalidAmount as exc:
         raise _to_http_error(exc) from exc
     return AccountResponse(

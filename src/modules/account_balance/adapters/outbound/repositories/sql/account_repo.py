@@ -63,15 +63,8 @@ class SqlAccountRepository(AccountRepository):
         )
 
     async def create(self, account: Account) -> None:
-        # Fresh row, nothing to lock - dev/test convenience only (see
-        # application/use_cases/create_dummy_account.py).
-        row = AccountRow(
-            id=account.id,
-            currency=account.currency,
-            balance=account.balance,
-            version=account.version,
-        )
-        self._session.add(row)
+        data = AccountRow.from_domain(account)
+        self._session.add(data)
         await self._session.flush()
         self._logger.info(
             "created dummy account id=%s balance=%s currency=%s",

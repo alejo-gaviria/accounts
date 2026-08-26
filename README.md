@@ -49,18 +49,25 @@ one to point them at. The easiest way is `POST /v1/accounts` — a
 **dev/test convenience endpoint, not a real account-onboarding flow**
 (no KYC, no customer linkage, it just inserts a row):
 
+Every account is denominated in MXN — `POST /v1/accounts` has no
+`currency` field at all (see "Currency conversion" below):
+
 ```bash
 curl -X POST http://localhost:8000/v1/accounts \
   -H "X-API-Key: 00000000-0000-0000-0000-000000000000" \
   -H "Content-Type: application/json" \
-  -d '{"currency": "USD", "initial_balance": "100.00"}'
-# => 201 {"id": "<uuid>", "balance": "100.00", "currency": "USD"}
+  -d '{"initial_balance": "100.00"}'
+# => 201 {"id": "<uuid>", "balance": "100.00", "currency": "MXN"}
 
 curl -X POST http://localhost:8000/v1/accounts/<uuid>/credit \
   -H "X-API-Key: 00000000-0000-0000-0000-000000000000" \
   -H "Idempotency-Key: smoke-1" \
   -H "Content-Type: application/json" \
-  -d '{"amount": "10.00"}'
+  -d '{"amount": "10.00", "currency": "USD"}'
+# => 200 {"account_id": "<uuid>", "balance": "169.6000", "entry_id": "<uuid>"}
+# 10 USD credited at the static 16.96 MXN/USD rate -> balance
+# increases by 169.60 MXN, not 10. Omit "currency" (or send "MXN") for
+# a 1:1 credit with no conversion.
 ```
 
 **Fallback / alternative**: if you'd rather seed a row directly (e.g.
@@ -69,12 +76,35 @@ isn't running yet), connect with `psql` and insert manually:
 
 ```bash
 psql postgresql://accounts:accounts@localhost:5442/accounts \
-  -c "INSERT INTO accounts (id, balance, currency) VALUES (gen_random_uuid(), 100.00, 'USD') RETURNING id;"
+  -c "INSERT INTO accounts (id, balance) VALUES (gen_random_uuid(), 100.00) RETURNING id;"
 ```
 
 Both approaches land in the same `accounts` table — the API endpoint
 is just faster for routine local testing since it doesn't require a
 `psql` session.
+
+### Currency conversion
+
+Balances are canonically MXN. `credit`/`debit`/`transfer` accept a
+`currency` field (default `"MXN"`) for the request *amount* — not the
+account's own currency, since every account is MXN. Supported
+currencies and their hardcoded MXN rates
+(`application/services/exchange_rates.py`, `StaticExchangeRates` — a
+static table, no external API, by explicit design choice):
+
+| Currency | MXN per 1 unit |
+|---|---|
+| MXN | 1 |
+| USD | 16.96 |
+| CAD | 12.22 |
+| COP | 0.00549 |
+| CNY | 2.52 |
+
+A currency outside this table is rejected with `400
+{"error": {"code": "unsupported_currency", ...}}`. Every ledger entry
+records `original_amount`/`original_currency`/`fx_rate` alongside the
+MXN `amount` actually applied, so "what did the caller actually send"
+is always reconstructable from the immutable ledger.
 
 ## Tests
 

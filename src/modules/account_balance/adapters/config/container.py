@@ -28,6 +28,9 @@ from src.infrastructure.db import async_session_factory
 from src.modules.account_balance.adapters.outbound.repositories.sql.uow import (
     SqlUnitOfWork,
 )
+from src.modules.account_balance.application.services.exchange_rates import (
+    StaticExchangeRates,
+)
 from src.modules.account_balance.application.use_cases.create_dummy_account import (
     CreateDummyAccountUseCase,
 )
@@ -56,17 +59,25 @@ class AccountBalanceContainer(containers.DeclarativeContainer):
         logger=logger_provider,
     )
 
+    # Pure/stateless (design.md "Currency Conversion") - safe as a
+    # Singleton unlike the repositories, since it holds no per-request
+    # DB session.
+    exchange_rates_provider = providers.Singleton(StaticExchangeRates)
+
     credit_use_case_provider = providers.Factory(
         CreditAccountUseCase,
         uow=unit_of_work_provider,
+        exchange_rates=exchange_rates_provider,
     )
     debit_use_case_provider = providers.Factory(
         DebitAccountUseCase,
         uow=unit_of_work_provider,
+        exchange_rates=exchange_rates_provider,
     )
     transfer_use_case_provider = providers.Factory(
         TransferUseCase,
         uow=unit_of_work_provider,
+        exchange_rates=exchange_rates_provider,
     )
     # Dev/test convenience only - see CreateDummyAccountUseCase's
     # docstring. Wired identically to the other use cases.

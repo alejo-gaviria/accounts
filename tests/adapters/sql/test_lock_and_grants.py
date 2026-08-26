@@ -81,8 +81,10 @@ async def test_ledger_entries_insert_and_select_allowed_for_app_role(
             await conn.execute(
                 text(
                     "INSERT INTO ledger_entries "
-                    "(account_id, entry_type, amount, currency, balance_after, idempotency_key) "
-                    "VALUES (:acct, 'credit', 10, 'USD', 110, 'k1')"
+                    "(account_id, entry_type, amount, currency, "
+                    "original_amount, original_currency, fx_rate, "
+                    "balance_after, idempotency_key) "
+                    "VALUES (:acct, 'credit', 10, 'MXN', 10, 'MXN', 1, 110, 'k1')"
                 ),
                 {"acct": str(account_id)},
             )

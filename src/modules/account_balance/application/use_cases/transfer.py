@@ -10,12 +10,22 @@ request Idempotency-Key (here: f"{key}#debit" / f"{key}#credit").
 House convention (design.md "Dependency Injection"): class with its
 UnitOfWork injected via constructor, wired via AccountBalanceContainer
 as a `providers.Factory`.
+
+Currency Conversion (design.md): converted to MXN ONCE, at the very
+start of execute(), using the request's currency — both legs apply the
+same converted MXN amount. No per-leg re-conversion, since both
+accounts are MXN-denominated now (there's no "accounts differ" case
+transfer used to need to guard against).
 """
 
 from dataclasses import dataclass
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 from src.modules.account_balance.application.gateways.unit_of_work import UnitOfWork
+from src.modules.account_balance.application.services.exchange_rates import (
+    StaticExchangeRates,
+)
 from src.modules.account_balance.application.services.idempotency import (
     append_with_replay,
 )
@@ -31,16 +41,22 @@ class TransferResult:
 
 
 class TransferUseCase:
-    def __init__(self, uow: UnitOfWork) -> None:
+    def __init__(self, uow: UnitOfWork, exchange_rates: StaticExchangeRates) -> None:
         self._uow = uow
+        self._exchange_rates = exchange_rates
 
     async def execute(
         self,
         from_account_id: UUID,
         to_account_id: UUID,
-        money: Money,
+        amount: Decimal,
+        currency: str,
         idempotency_key: str,
     ) -> TransferResult:
+        converted_amount, rate_used = self._exchange_rates.to_mxn(amount, currency)
+        money = Money(converted_amount, "MXN")
+        original_currency = currency.upper()
+
         debit_key = f"{idempotency_key}#debit"
         credit_key = f"{idempotency_key}#credit"
 
@@ -72,7 +88,12 @@ class TransferUseCase:
 
             # May raise InsufficientFunds — propagates, no rows written.
             debit_entry = from_account.apply_debit(
-                money, debit_key, transfer_id=transfer_id
+                money,
+                debit_key,
+                transfer_id=transfer_id,
+                original_amount=amount,
+                original_currency=original_currency,
+                fx_rate=rate_used,
             )
             debit_result, debit_replay = await append_with_replay(
                 uow.ledger, debit_entry
@@ -86,7 +107,12 @@ class TransferUseCase:
                 )
 
             credit_entry = to_account.apply_credit(
-                money, credit_key, transfer_id=transfer_id
+                money,
+                credit_key,
+                transfer_id=transfer_id,
+                original_amount=amount,
+                original_currency=original_currency,
+                fx_rate=rate_used,
             )
             credit_result, credit_replay = await append_with_replay(
                 uow.ledger, credit_entry

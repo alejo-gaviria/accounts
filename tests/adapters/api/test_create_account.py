@@ -4,7 +4,8 @@ NOT a spec scenario (not a real onboarding/business capability) - just
 behavioral coverage for the tooling: happy path creates a fresh account
 and returns 201, and a negative initial_balance is rejected the same
 way credit/debit reject a negative amount (400, InvalidAmount, same
-error body shape).
+error body shape). No `currency` field at all (Currency Conversion,
+design.md) — every account is MXN by construction.
 """
 
 from decimal import Decimal
@@ -18,25 +19,40 @@ async def test_create_account_with_defaults_returns_201(client, valid_headers):
 
     assert resp.status_code == 201
     body = resp.json()
-    assert body["currency"] == "USD"
+    assert body["currency"] == "MXN"
     assert Decimal(body["balance"]) == Decimal("0")
     assert "id" in body
 
 
 @pytest.mark.asyncio
-async def test_create_account_with_currency_and_initial_balance(
-    client, valid_headers
-):
+async def test_create_account_with_initial_balance(client, valid_headers):
     resp = await client.post(
         "/v1/accounts",
-        json={"currency": "EUR", "initial_balance": "100.00"},
+        json={"initial_balance": "100.00"},
         headers=valid_headers,
     )
 
     assert resp.status_code == 201
     body = resp.json()
-    assert body["currency"] == "EUR"
+    assert body["currency"] == "MXN"
     assert Decimal(body["balance"]) == Decimal("100.00")
+
+
+@pytest.mark.asyncio
+async def test_create_account_ignores_a_currency_field_if_sent(
+    client, valid_headers
+):
+    # CreateAccountRequest has no currency field at all - Pydantic
+    # silently drops unknown fields, so this must NOT change the
+    # outcome: still MXN, regardless of what the caller sends.
+    resp = await client.post(
+        "/v1/accounts",
+        json={"currency": "USD", "initial_balance": "10.00"},
+        headers=valid_headers,
+    )
+
+    assert resp.status_code == 201
+    assert resp.json()["currency"] == "MXN"
 
 
 @pytest.mark.asyncio

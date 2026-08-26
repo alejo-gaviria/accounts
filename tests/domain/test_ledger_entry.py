@@ -23,6 +23,7 @@ def _make_entry() -> LedgerEntry:
         amount=Money(Decimal("1.00")),
         balance_after=Decimal("1.00"),
         idempotency_key="key",
+        original_amount=Decimal("1.00"),
     )
 
 
@@ -52,4 +53,12 @@ def test_money_accepts_positive_amount_with_default_currency():
     money = Money(Decimal("5.00"))
 
     assert money.amount == Decimal("5.00")
-    assert money.currency == "USD"
+    assert money.currency == "MXN"
+
+
+def test_ledger_entry_defaults_original_currency_and_fx_rate_to_no_conversion():
+    entry = _make_entry()
+
+    assert entry.original_amount == Decimal("1.00")
+    assert entry.original_currency == "MXN"
+    assert entry.fx_rate == Decimal("1")

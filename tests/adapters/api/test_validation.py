@@ -113,3 +113,38 @@ async def test_get_account_returns_current_balance(client, accounts_store):
 
     assert resp.status_code == 200
     assert Decimal(resp.json()["balance"]) == Decimal("42.50")
+
+
+@pytest.mark.asyncio
+async def test_credit_in_usd_converts_to_mxn_before_applying(
+    client, valid_headers, accounts_store
+):
+    account = Account(id=uuid4(), balance=Decimal("0"))
+    accounts_store[account.id] = account
+
+    resp = await client.post(
+        f"/v1/accounts/{account.id}/credit",
+        json={"amount": "10.00", "currency": "USD"},
+        headers=valid_headers,
+    )
+
+    assert resp.status_code == 200
+    # 10 USD * 16.96 MXN/USD = 169.60 MXN.
+    assert Decimal(resp.json()["balance"]) == Decimal("169.6000")
+
+
+@pytest.mark.asyncio
+async def test_unsupported_currency_rejected_with_400(
+    client, valid_headers, accounts_store
+):
+    account = Account(id=uuid4(), balance=Decimal("10"))
+    accounts_store[account.id] = account
+
+    resp = await client.post(
+        f"/v1/accounts/{account.id}/credit",
+        json={"amount": "10.00", "currency": "EUR"},
+        headers=valid_headers,
+    )
+
+    assert resp.status_code == 400
+    assert resp.json()["error"]["code"] == "unsupported_currency"

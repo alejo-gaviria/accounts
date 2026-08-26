@@ -56,3 +56,30 @@ def test_debit_of_exactly_the_full_balance_is_allowed():
 
     assert account.balance == Decimal("0.00")
     assert entry.balance_after == Decimal("0.00")
+
+
+def test_apply_credit_defaults_ledger_entry_audit_fields_to_no_conversion():
+    account = Account(balance=Decimal("10.00"))
+
+    entry = account.apply_credit(Money(Decimal("5.00")), idempotency_key="key-5")
+
+    assert entry.original_amount == Decimal("5.00")
+    assert entry.original_currency == "MXN"
+    assert entry.fx_rate == Decimal("1")
+
+
+def test_apply_credit_threads_through_explicit_conversion_audit_fields():
+    account = Account(balance=Decimal("10.00"))
+
+    entry = account.apply_credit(
+        Money(Decimal("169.60")),  # already converted to MXN by the caller
+        idempotency_key="key-6",
+        original_amount=Decimal("10.00"),
+        original_currency="USD",
+        fx_rate=Decimal("16.96"),
+    )
+
+    assert entry.amount.amount == Decimal("169.60")
+    assert entry.original_amount == Decimal("10.00")
+    assert entry.original_currency == "USD"
+    assert entry.fx_rate == Decimal("16.96")

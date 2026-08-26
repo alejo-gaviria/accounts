@@ -34,3 +34,9 @@ class UnknownAccount(DomainError):
     def __init__(self, account_id: UUID) -> None:
         self.account_id = account_id
         super().__init__(f"Unknown account: {account_id}")
+
+
+class UnsupportedCurrency(DomainError):
+    def __init__(self, currency: str) -> None:
+        self.currency = currency
+        super().__init__(f"Unsupported currency: {currency}")
