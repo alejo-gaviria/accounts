@@ -23,7 +23,7 @@ import logging
 
 from dependency_injector import containers, providers
 
-from src.db import async_session_factory
+from src.infrastructure.db import async_session_factory
 from src.modules.account_balance.adapters.outbound.repositories.sql.uow import (
     SqlUnitOfWork,
 )

@@ -15,7 +15,7 @@ from dependency_injector import providers
 from httpx import ASGITransport, AsyncClient
 
 from src.config import settings
-from src.main import app as fastapi_app
+from src.infrastructure.main import app as fastapi_app
 from tests.application.fakes import (
     FakeAccountRepository,
     FakeLedgerRepository,

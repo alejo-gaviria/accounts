@@ -25,7 +25,7 @@ def create_app() -> FastAPI:
     container = AccountBalanceContainer()
     container.wire(modules=_WIRED_MODULES)
 
-    app = FastAPI(title="effex-accounts", version="0.1.0")
+    app = FastAPI(title="effex-accounts", version="0.1.0", description="Effex Accounts")
     app.container = container  # exposed for tests to override providers
 
     register_error_handlers(app)

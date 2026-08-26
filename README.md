@@ -27,7 +27,7 @@ make up          # == docker compose up -d db
 make migrate      # == uv run alembic upgrade head
 
 # Run the app
-uv run uvicorn src.main:app --reload
+uv run uvicorn src.infrastructure.main:app --reload
 ```
 
 Configuration is read from environment variables / a local `.env` file
@@ -61,7 +61,7 @@ reachable.
 ## Container / deployment shape
 
 `Dockerfile` builds a `python:3.12-slim` image (`uv sync --frozen --no-dev`,
-`CMD uvicorn src.main:app --host 0.0.0.0 --port 8000`). The AWS target
+`CMD uvicorn src.infrastructure.main:app --host 0.0.0.0 --port 8000`). The AWS target
 shape (not provisioned by anything in this repo) is ECS/Fargate running
 that image against a managed RDS Postgres 16 instance, with
 `DATABASE_URL`/`APP_DB_PASSWORD` etc. injected via Secrets Manager.

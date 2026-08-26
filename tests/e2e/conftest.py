@@ -15,7 +15,7 @@ import pytest
 from dependency_injector import providers
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from src.main import app as fastapi_app
+from src.infrastructure.main import app as fastapi_app
 from src.modules.account_balance.adapters.outbound.repositories.sql.uow import (
     SqlUnitOfWork,
 )
