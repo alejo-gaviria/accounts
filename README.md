@@ -1,4 +1,4 @@
-# effex-accounts
+# SuperCool Finances-accounts
 
 Account balances microservice. Hexagonal `account_balance` module:
 domain owns the `Account` aggregate and immutable `LedgerEntry` rows;
