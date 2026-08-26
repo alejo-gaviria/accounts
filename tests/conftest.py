@@ -83,7 +83,13 @@ async def engine() -> AsyncIterator[AsyncEngine]:
     schema + accounts_app grants created fresh, skips (not fails) if
     db-test isn't reachable. Shared by tests/adapters/sql and tests/e2e.
     """
-    from src.modules.account_balance.adapters.outbound.repositories.sql.models import (
+    # Import the entity DBO modules (not just base) so their tables
+    # register onto Base.metadata before create_all runs below.
+    from src.modules.account_balance.adapters.outbound.repositories.sql.dbos import (
+        account,  # noqa: F401
+        ledger_entry,  # noqa: F401
+    )
+    from src.modules.account_balance.adapters.outbound.repositories.sql.dbos.base import (
         Base,
     )
 

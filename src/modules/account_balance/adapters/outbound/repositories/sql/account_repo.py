@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import func
 
-from src.modules.account_balance.adapters.outbound.repositories.sql.models import (
+from src.modules.account_balance.adapters.outbound.repositories.sql.dbos.account import (
     AccountRow,
 )
 from src.modules.account_balance.domain.account import Account

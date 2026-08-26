@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.modules.account_balance.adapters.outbound.repositories.sql.models import (
+from src.modules.account_balance.adapters.outbound.repositories.sql.dbos.ledger_entry import (
     LedgerEntryRow,
 )
 from src.modules.account_balance.application.gateways.ledger_repository import (
