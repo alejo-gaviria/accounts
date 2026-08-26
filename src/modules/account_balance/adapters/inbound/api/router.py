@@ -26,9 +26,6 @@ from src.modules.account_balance.adapters.inbound.api.schemas import (
     TransferRequest,
     TransferResponse,
 )
-from src.modules.account_balance.application.gateways.account_repository import (
-    AccountRepository,
-)
 from src.modules.account_balance.application.gateways.unit_of_work import UnitOfWork
 from src.modules.account_balance.application.use_cases.credit import (
     CreditAccountUseCase,
@@ -146,18 +143,15 @@ async def create_transfer(
 async def get_account(
     account_id: UUID,
     uow: UnitOfWork = Depends(Provide[AccountBalanceContainer.unit_of_work_provider]),
-    account_repository: AccountRepository = Depends(
-        Provide[AccountBalanceContainer.account_repository_provider]
-    ),
 ) -> AccountResponse:
     # No dedicated read use case for a single-repo lookup (no separate
     # non-locking read method exists on the port either — see
-    # account_repo.py); reuses get_for_update()+immediate rollback,
-    # same as before the DI refactor.
+    # account_repo.py); reuses get_for_update(). Normal return commits
+    # the (read-only, nothing-mutated) transaction, releasing the lock -
+    # same effect as an explicit rollback would have had here.
     try:
-        async with uow:
-            account = await account_repository.get_for_update(account_id)
-            await uow.rollback()
+        async with uow as uow:
+            account = await uow.accounts.get_for_update(account_id)
     except UnknownAccount as exc:
         raise _to_http_error(exc) from exc
     return AccountResponse(

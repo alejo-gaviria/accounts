@@ -1,16 +1,15 @@
 """E2E fixtures: the REAL FastAPI app (src.main:app), REAL SqlUnitOfWork
-and SQL repos - only the DB connection target is swapped (from the dev
-`db` service to the test-db `engine`/`app_role_engine_url` fixtures in
-the root conftest).
-
-account_repository_provider/ledger_repository_provider need NO
-override at all: the real SqlAccountRepository/SqlLedgerRepository
-singletons resolve their DB session from context at call time (see
-session_context.py), so they work unchanged regardless of which
-Postgres the active SqlUnitOfWork's session came from. Only
-unit_of_work_provider needs overriding, to a session factory pointed
-at db-test instead of the dev `db` service.
+(which builds REAL SqlAccountRepository/SqlLedgerRepository fresh in
+its own __aenter__) - only the DB connection target is swapped, from
+the dev `db` service to the test-db `engine`/`app_role_engine_url`
+fixtures in the root conftest. Only `unit_of_work_provider` needs
+overriding (to a session factory pointed at db-test, plus a logger -
+SqlUnitOfWork's constructor requires both) - there is no separate
+repository provider to override, since repos are never resolved from
+the container directly.
 """
+
+import logging
 
 import pytest
 from dependency_injector import providers
@@ -27,9 +26,12 @@ def app(engine, app_role_engine_url):
     container = fastapi_app.container
     test_app_engine = create_async_engine(app_role_engine_url)
     session_factory = async_sessionmaker(test_app_engine, expire_on_commit=False)
+    test_logger = logging.getLogger("test.account_balance.e2e")
 
     container.unit_of_work_provider.override(
-        providers.Factory(SqlUnitOfWork, session_factory=session_factory)
+        providers.Factory(
+            SqlUnitOfWork, session_factory=session_factory, logger=test_logger
+        )
     )
 
     yield fastapi_app

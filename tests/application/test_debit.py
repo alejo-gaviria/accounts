@@ -27,9 +27,9 @@ from tests.application.fakes import (
 async def test_debit_decreases_balance_when_sufficient_funds():
     account = Account(id=uuid4(), balance=Decimal("10.00"))
     accounts = FakeAccountRepository({account.id: account})
-    ledgers = FakeLedgerRepository()
-    uow = FakeUnitOfWork()
-    use_case = DebitAccountUseCase(uow, accounts, ledgers)
+    ledger = FakeLedgerRepository()
+    uow = FakeUnitOfWork(accounts, ledger)
+    use_case = DebitAccountUseCase(uow)
 
     entry = await use_case.execute(account.id, Money(Decimal("4.00")), "key-1")
 
@@ -42,14 +42,14 @@ async def test_debit_decreases_balance_when_sufficient_funds():
 async def test_debit_raises_insufficient_funds_and_writes_no_ledger_row():
     account = Account(id=uuid4(), balance=Decimal("10.00"))
     accounts = FakeAccountRepository({account.id: account})
-    ledgers = FakeLedgerRepository()
-    uow = FakeUnitOfWork()
-    use_case = DebitAccountUseCase(uow, accounts, ledgers)
+    ledger = FakeLedgerRepository()
+    uow = FakeUnitOfWork(accounts, ledger)
+    use_case = DebitAccountUseCase(uow)
 
     with pytest.raises(InsufficientFunds):
         await use_case.execute(account.id, Money(Decimal("10.01")), "key-2")
 
-    assert ledgers.entries == []
+    assert ledger.entries == []
     assert account.balance == Decimal("10.00")
     assert accounts.saved == []
     assert uow.committed is False

@@ -7,20 +7,14 @@ avoidance for concurrent opposite-direction transfers); both legs share
 one transfer_id; per-leg idempotency keys are derived from the single
 request Idempotency-Key (here: f"{key}#debit" / f"{key}#credit").
 
-House convention (design.md "Dependency Injection"): class with
-constructor-injected dependencies, wired via AccountBalanceContainer as
-a `providers.Factory`.
+House convention (design.md "Dependency Injection"): class with its
+UnitOfWork injected via constructor, wired via AccountBalanceContainer
+as a `providers.Factory`.
 """
 
 from dataclasses import dataclass
 from uuid import UUID, uuid4
 
-from src.modules.account_balance.application.gateways.account_repository import (
-    AccountRepository,
-)
-from src.modules.account_balance.application.gateways.ledger_repository import (
-    LedgerRepository,
-)
 from src.modules.account_balance.application.gateways.unit_of_work import UnitOfWork
 from src.modules.account_balance.application.services.idempotency import (
     append_with_replay,
@@ -37,15 +31,8 @@ class TransferResult:
 
 
 class TransferUseCase:
-    def __init__(
-        self,
-        uow: UnitOfWork,
-        account_repository: AccountRepository,
-        ledger_repository: LedgerRepository,
-    ) -> None:
+    def __init__(self, uow: UnitOfWork) -> None:
         self._uow = uow
-        self._accounts = account_repository
-        self._ledgers = ledger_repository
 
     async def execute(
         self,
@@ -62,22 +49,21 @@ class TransferUseCase:
         # direction between the same two accounts.
         first_id, second_id = sorted((from_account_id, to_account_id))
 
-        async with self._uow:
+        async with self._uow as uow:
             locked = {
-                first_id: await self._accounts.get_for_update(first_id),
-                second_id: await self._accounts.get_for_update(second_id),
+                first_id: await uow.accounts.get_for_update(first_id),
+                second_id: await uow.accounts.get_for_update(second_id),
             }
             from_account = locked[from_account_id]
             to_account = locked[to_account_id]
 
-            existing_debit = await self._ledgers.find_by_idempotency_key(
+            existing_debit = await uow.ledger.find_by_idempotency_key(
                 from_account_id, debit_key
             )
             if existing_debit is not None:
-                existing_credit = await self._ledgers.find_by_idempotency_key(
+                existing_credit = await uow.ledger.find_by_idempotency_key(
                     to_account_id, credit_key
                 )
-                await self._uow.rollback()
                 return TransferResult(
                     existing_debit.transfer_id, existing_debit, existing_credit
                 )
@@ -89,13 +75,12 @@ class TransferUseCase:
                 money, debit_key, transfer_id=transfer_id
             )
             debit_result, debit_replay = await append_with_replay(
-                self._ledgers, debit_entry
+                uow.ledger, debit_entry
             )
             if debit_replay:
-                existing_credit = await self._ledgers.find_by_idempotency_key(
+                existing_credit = await uow.ledger.find_by_idempotency_key(
                     to_account_id, credit_key
                 )
-                await self._uow.rollback()
                 return TransferResult(
                     debit_result.transfer_id, debit_result, existing_credit
                 )
@@ -104,16 +89,14 @@ class TransferUseCase:
                 money, credit_key, transfer_id=transfer_id
             )
             credit_result, credit_replay = await append_with_replay(
-                self._ledgers, credit_entry
+                uow.ledger, credit_entry
             )
             if credit_replay:
                 # Defensive only: the debit leg above already proved
                 # this is a new key pair, so this should not occur in
                 # practice.
-                await self._uow.rollback()
                 return TransferResult(transfer_id, debit_result, credit_result)
 
-            await self._accounts.save(from_account)
-            await self._accounts.save(to_account)
-            await self._uow.commit()
+            await uow.accounts.save(from_account)
+            await uow.accounts.save(to_account)
             return TransferResult(transfer_id, debit_result, credit_result)

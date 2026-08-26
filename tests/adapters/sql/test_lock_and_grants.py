@@ -12,6 +12,7 @@ self-skip (not fail) wherever `db-test` isn't reachable.
 """
 
 import asyncio
+import logging
 from decimal import Decimal
 from uuid import uuid4
 
@@ -23,12 +24,10 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from src.modules.account_balance.adapters.outbound.repositories.sql.account_repo import (
     SqlAccountRepository,
 )
-from src.modules.account_balance.adapters.outbound.repositories.sql.session_context import (
-    reset_current_session,
-    set_current_session,
-)
 
 pytestmark = pytest.mark.integration
+
+_test_logger = logging.getLogger("test.account_balance")
 
 
 @pytest.mark.asyncio
@@ -97,11 +96,12 @@ async def test_ledger_entries_insert_and_select_allowed_for_app_role(
 async def test_get_for_update_blocks_a_second_lock_on_the_same_account(
     engine, session_factory
 ):
-    """SqlAccountRepository is a singleton with no per-session state of
-    its own (DI refactor) — it resolves the ambient session via
-    session_context. Two "concurrent" sessions are simulated here by
-    swapping which session is ambient before each call, exactly like
-    SqlUnitOfWork.__aenter__/__aexit__ do for real requests.
+    """SqlAccountRepository is a plain class taking its session via the
+    constructor (DI refactor - no singleton, no ambient/contextvar
+    state) - two "concurrent" transactions are simulated here with two
+    separate sessions, each with its own repository instance, exactly
+    like two different SqlUnitOfWork.__aenter__ calls for two different
+    requests would produce.
     """
     account_id = uuid4()
     async with engine.begin() as conn:
@@ -112,33 +112,23 @@ async def test_get_for_update_blocks_a_second_lock_on_the_same_account(
 
     session_a = session_factory()
     session_b = session_factory()
-    repo = SqlAccountRepository()
     try:
-        token_a = set_current_session(session_a)
-        await repo.get_for_update(account_id)  # holds the lock
-        reset_current_session(token_a)
+        repo_a = SqlAccountRepository(session=session_a, logger=_test_logger)
+        repo_b = SqlAccountRepository(session=session_b, logger=_test_logger)
+
+        await repo_a.get_for_update(account_id)  # holds the lock
 
         # A second lock attempt on the same row must block until the
         # first transaction ends - prove it by racing a short timeout.
-        token_b = set_current_session(session_b)
-        try:
-            with pytest.raises(asyncio.TimeoutError):
-                await asyncio.wait_for(
-                    repo.get_for_update(account_id), timeout=0.5
-                )
-        finally:
-            reset_current_session(token_b)
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(repo_b.get_for_update(account_id), timeout=0.5)
 
         await session_a.rollback()  # releases the lock
 
         # Now it should succeed promptly.
-        token_b2 = set_current_session(session_b)
-        try:
-            account = await asyncio.wait_for(
-                repo.get_for_update(account_id), timeout=2.0
-            )
-        finally:
-            reset_current_session(token_b2)
+        account = await asyncio.wait_for(
+            repo_b.get_for_update(account_id), timeout=2.0
+        )
         assert account.id == account_id
     finally:
         await session_a.close()

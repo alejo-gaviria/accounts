@@ -3,34 +3,27 @@ Injection" — project convention, `dependency-injector`,
 `SharedContainer`-style: `providers.Singleton` for stateful/shared
 things, `providers.Factory` for per-request instances).
 
-Scope stays local to this module: DB session pool, repos, and use
-cases only — no AWS/S3/SNS/SQS/Redis/JWT providers, none of those are
-v1 scope here.
+Everything is injected, nothing ambient — including the DB session and
+the logger. Repositories are deliberately NOT wired here as
+container-level providers: a singleton repo can't safely hold a
+per-request DB session/transaction. Instead only `session_factory_provider`
+(Singleton — reuses src/db.py's existing async_sessionmaker/engine
+setup) and `logger_provider` (Factory) are injected into
+`unit_of_work_provider` (Factory — a fresh SqlUnitOfWork, and therefore
+a fresh transaction, per resolution). SqlUnitOfWork.__aenter__
+constructs SqlAccountRepository/SqlLedgerRepository itself, passing
+them the session + logger — see unit_of_work.py's port docstring.
 
-Deviation from the illustrative pseudocode in design.md, disclosed
-explicitly: `account_repository_provider`/`ledger_repository_provider`
-are wired with NO constructor args here (not `db_pool=...`). This
-module's repos resolve the ambient DB session via a contextvar that
-SqlUnitOfWork sets for the duration of `async with uow:` (see
-adapters/outbound/repositories/sql/session_context.py) rather than
-opening their own connection from the pool directly — that's what lets
-them be genuine, safely-shared Singletons while still guaranteeing
-every repository call in a given request runs on the exact same
-transaction as the UnitOfWork (required for `FOR UPDATE` locking and
-atomic ledger+balance commits). `db_session_provider` (the pool itself)
-is still wired and still feeds `unit_of_work_provider`, which is the
-one thing that actually needs it.
+Scope stays local to this module: session factory, UoW, use cases only
+— no AWS/S3/SNS/SQS/Redis/JWT providers, none of those are v1 scope
+here.
 """
+
+import logging
 
 from dependency_injector import containers, providers
 
 from src.db import async_session_factory
-from src.modules.account_balance.adapters.outbound.repositories.sql.account_repo import (
-    SqlAccountRepository,
-)
-from src.modules.account_balance.adapters.outbound.repositories.sql.ledger_repo import (
-    SqlLedgerRepository,
-)
 from src.modules.account_balance.adapters.outbound.repositories.sql.uow import (
     SqlUnitOfWork,
 )
@@ -44,35 +37,30 @@ from src.modules.account_balance.application.use_cases.transfer import TransferU
 
 
 class AccountBalanceContainer(containers.DeclarativeContainer):
-    # Stateful/shared for the process lifetime: the async sessionmaker
-    # bound to src/db.py's engine (itself backed by a real asyncpg
-    # connection pool).
-    db_session_provider = providers.Object(async_session_factory)
+    # Named (not root) logger, still injected rather than grabbed via a
+    # module-level `logging.getLogger(__name__)` anywhere in this module.
+    logger_provider = providers.Factory(logging.getLogger, "account_balance")
 
-    account_repository_provider = providers.Singleton(SqlAccountRepository)
-    ledger_repository_provider = providers.Singleton(SqlLedgerRepository)
+    # Wraps the sessionmaker/engine already set up in src/db.py (which
+    # connects as the restricted accounts_app role) rather than building
+    # a second one here.
+    session_factory_provider = providers.Object(async_session_factory)
 
-    # Per-request: a fresh session/transaction for every use-case call.
     unit_of_work_provider = providers.Factory(
         SqlUnitOfWork,
-        session_factory=db_session_provider,
+        session_factory=session_factory_provider,
+        logger=logger_provider,
     )
 
     credit_use_case_provider = providers.Factory(
         CreditAccountUseCase,
         uow=unit_of_work_provider,
-        account_repository=account_repository_provider,
-        ledger_repository=ledger_repository_provider,
     )
     debit_use_case_provider = providers.Factory(
         DebitAccountUseCase,
         uow=unit_of_work_provider,
-        account_repository=account_repository_provider,
-        ledger_repository=ledger_repository_provider,
     )
     transfer_use_case_provider = providers.Factory(
         TransferUseCase,
         uow=unit_of_work_provider,
-        account_repository=account_repository_provider,
-        ledger_repository=ledger_repository_provider,
     )

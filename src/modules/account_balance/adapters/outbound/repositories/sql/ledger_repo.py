@@ -1,23 +1,22 @@
 """SQL implementation of the LedgerRepository port.
 
-Insert/select only - deliberately no update/delete methods exist on
+Insert/select only — deliberately no update/delete methods exist on
 this class at all, mirroring the DB-level append-only grant (the
 accounts_app role has no UPDATE/DELETE on ledger_entries; see the
-initial migration). Wired as a `providers.Singleton` in
-AccountBalanceContainer; resolves the ambient session via
-session_context, same as SqlAccountRepository.
+initial migration). Plain class taking session and logger via
+constructor injection; built fresh by SqlUnitOfWork.__aenter__ for
+every transaction, never a container-level singleton.
 """
 
+import logging
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.modules.account_balance.adapters.outbound.repositories.sql.models import (
     LedgerEntryRow,
-)
-from src.modules.account_balance.adapters.outbound.repositories.sql.session_context import (
-    get_current_session,
 )
 from src.modules.account_balance.application.gateways.ledger_repository import (
     DuplicateIdempotencyKey,
@@ -29,8 +28,11 @@ _UNIQUE_IDEMPOTENCY_CONSTRAINT = "uq_ledger_acct_idem"
 
 
 class SqlLedgerRepository:
+    def __init__(self, session: AsyncSession, logger: logging.Logger) -> None:
+        self._session = session
+        self._logger = logger
+
     async def append(self, entry: LedgerEntry) -> None:
-        session = get_current_session()
         row = LedgerEntryRow(
             id=entry.id,
             account_id=entry.account_id,
@@ -41,25 +43,29 @@ class SqlLedgerRepository:
             idempotency_key=entry.idempotency_key,
             transfer_id=entry.transfer_id,
         )
-        session.add(row)
+        self._session.add(row)
         try:
             # flush (not commit) - stays inside the caller's transaction;
             # this only needs to prove the unique constraint, not end
             # the unit of work.
-            await session.flush()
+            await self._session.flush()
         except IntegrityError as exc:
             # A failed flush leaves the session unusable until rolled
             # back (SQLAlchemy requirement) - roll back just far enough
             # to let the caller run find_by_idempotency_key() next in
-            # the same unit-of-work block. The owning SqlUnitOfWork's
-            # own commit()/rollback() still governs the whole
-            # transaction/session lifetime.
-            await session.rollback()
+            # the same unit-of-work block. SqlUnitOfWork.__aexit__ still
+            # governs the whole transaction/session lifetime.
+            await self._session.rollback()
 
             constraint_name = getattr(
                 getattr(exc, "orig", None), "constraint_name", None
             )
             if constraint_name == _UNIQUE_IDEMPOTENCY_CONSTRAINT:
+                self._logger.info(
+                    "duplicate idempotency key account_id=%s key=%s",
+                    entry.account_id,
+                    entry.idempotency_key,
+                )
                 raise DuplicateIdempotencyKey(
                     entry.account_id, entry.idempotency_key
                 ) from exc
@@ -68,12 +74,11 @@ class SqlLedgerRepository:
     async def find_by_idempotency_key(
         self, account_id: UUID, idempotency_key: str
     ) -> LedgerEntry | None:
-        session = get_current_session()
         stmt = select(LedgerEntryRow).where(
             LedgerEntryRow.account_id == account_id,
             LedgerEntryRow.idempotency_key == idempotency_key,
         )
-        row = (await session.execute(stmt)).scalar_one_or_none()
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
         if row is None:
             return None
 

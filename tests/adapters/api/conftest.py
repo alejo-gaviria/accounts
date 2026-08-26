@@ -1,13 +1,12 @@
 """In-process API test fixtures.
 
 Uses the REAL wired app (src.main.app) and overrides the container's
-leaf providers (account_repository_provider, ledger_repository_provider,
-unit_of_work_provider) with fakes via `provider.override(...)` -
-dependency-injector's own supported testing pattern. Because the real
-credit/debit/transfer use-case providers reference those leaf providers
-BY REFERENCE (not by snapshotted value), overriding just the three leaf
-providers is enough - no need to also override each use-case provider
-individually. No live DB needed.
+`unit_of_work_provider` with a Factory that builds a fresh
+FakeUnitOfWork (fresh .committed/.rolled_back per "request", same as a
+real fresh transaction) sharing the SAME fake accounts/ledger stores
+across requests within one test - dependency-injector's own supported
+testing pattern (provider.override(...)/reset_override()). No live DB
+needed.
 """
 
 import pytest
@@ -39,14 +38,12 @@ def app(accounts_store, ledger_store):
     container = fastapi_app.container
     fake_accounts = FakeAccountRepository(accounts_store)
 
-    container.account_repository_provider.override(providers.Object(fake_accounts))
-    container.ledger_repository_provider.override(providers.Object(ledger_store))
-    container.unit_of_work_provider.override(providers.Factory(FakeUnitOfWork))
+    container.unit_of_work_provider.override(
+        providers.Factory(FakeUnitOfWork, accounts=fake_accounts, ledger=ledger_store)
+    )
 
     yield fastapi_app
 
-    container.account_repository_provider.reset_override()
-    container.ledger_repository_provider.reset_override()
     container.unit_of_work_provider.reset_override()
 
 

@@ -33,8 +33,8 @@ def _two_accounts() -> tuple[Account, Account]:
 async def test_transfer_moves_funds_and_links_both_ledger_entries():
     low, high = _two_accounts()  # low.id < high.id
     accounts = FakeAccountRepository({low.id: low, high.id: high})
-    ledgers = FakeLedgerRepository()
-    use_case = TransferUseCase(FakeUnitOfWork(), accounts, ledgers)
+    ledger = FakeLedgerRepository()
+    use_case = TransferUseCase(FakeUnitOfWork(accounts, ledger))
 
     result = await use_case.execute(low.id, high.id, Money(Decimal("5.00")), "req-1")
 
@@ -42,16 +42,16 @@ async def test_transfer_moves_funds_and_links_both_ledger_entries():
     assert high.balance == Decimal("10.00")
     assert result.debit_entry.transfer_id == result.transfer_id
     assert result.credit_entry.transfer_id == result.transfer_id
-    assert {e.account_id for e in ledgers.entries} == {low.id, high.id}
+    assert {e.account_id for e in ledger.entries} == {low.id, high.id}
 
 
 @pytest.mark.asyncio
 async def test_transfer_commits_the_unit_of_work_on_success():
     low, high = _two_accounts()
     accounts = FakeAccountRepository({low.id: low, high.id: high})
-    ledgers = FakeLedgerRepository()
-    uow = FakeUnitOfWork()
-    use_case = TransferUseCase(uow, accounts, ledgers)
+    ledger = FakeLedgerRepository()
+    uow = FakeUnitOfWork(accounts, ledger)
+    use_case = TransferUseCase(uow)
 
     await use_case.execute(low.id, high.id, Money(Decimal("5.00")), "req-1")
 
@@ -63,13 +63,13 @@ async def test_transfer_locks_accounts_in_ascending_id_order_regardless_of_direc
     low, high = _two_accounts()
 
     accounts_a = FakeAccountRepository({low.id: low, high.id: high})
-    use_case_a = TransferUseCase(FakeUnitOfWork(), accounts_a, FakeLedgerRepository())
+    use_case_a = TransferUseCase(FakeUnitOfWork(accounts_a, FakeLedgerRepository()))
     await use_case_a.execute(low.id, high.id, Money(Decimal("1.00")), "req-a")
     assert accounts_a.lock_order == [low.id, high.id]
 
     low2, high2 = _two_accounts()
     accounts_b = FakeAccountRepository({low2.id: low2, high2.id: high2})
-    use_case_b = TransferUseCase(FakeUnitOfWork(), accounts_b, FakeLedgerRepository())
+    use_case_b = TransferUseCase(FakeUnitOfWork(accounts_b, FakeLedgerRepository()))
     # Opposite direction: destination has the lower id this time.
     await use_case_b.execute(high2.id, low2.id, Money(Decimal("1.00")), "req-b")
     assert accounts_b.lock_order == [low2.id, high2.id]
@@ -79,13 +79,13 @@ async def test_transfer_locks_accounts_in_ascending_id_order_regardless_of_direc
 async def test_transfer_insufficient_funds_rolls_back_with_no_ledger_rows():
     low, high = _two_accounts()
     accounts = FakeAccountRepository({low.id: low, high.id: high})
-    ledgers = FakeLedgerRepository()
-    uow = FakeUnitOfWork()
-    use_case = TransferUseCase(uow, accounts, ledgers)
+    ledger = FakeLedgerRepository()
+    uow = FakeUnitOfWork(accounts, ledger)
+    use_case = TransferUseCase(uow)
 
     with pytest.raises(InsufficientFunds):
         await use_case.execute(high.id, low.id, Money(Decimal("999.00")), "req-2")
 
-    assert ledgers.entries == []
+    assert ledger.entries == []
     assert uow.committed is False
     assert uow.rolled_back is True

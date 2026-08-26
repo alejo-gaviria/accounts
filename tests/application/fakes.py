@@ -5,12 +5,11 @@ with no live infra ("N/A — pure logic, no live infra needed" per the
 tasks.md Suggested Work Units table) — these fakes are what make that
 possible. The real Postgres-backed adapters are Phase 5.
 
-Under the dependency-injector refactor, UnitOfWork is just the
-transaction boundary (no `.accounts`/`.ledgers`) — use cases take
-FakeAccountRepository/FakeLedgerRepository as separate constructor
-args, exactly as the real container wires
-account_repository_provider/ledger_repository_provider independently
-from unit_of_work_provider.
+FakeUnitOfWork mirrors the real SqlUnitOfWork's shape: `.accounts`/
+`.ledger` are set (here, passed straight through rather than
+constructed in `__aenter__`, since fakes need no session/logger to
+build), and `__aexit__`'s commit/rollback outcome is exception-driven,
+same as the real one — no ambient state anywhere in either.
 """
 
 from uuid import UUID
@@ -69,11 +68,11 @@ class FakeLedgerRepository:
 
 
 class FakeUnitOfWork:
-    """Pure transaction-boundary fake — no `.accounts`/`.ledgers`,
-    matching the real UnitOfWork port after the DI refactor.
-    """
-
-    def __init__(self) -> None:
+    def __init__(
+        self, accounts: FakeAccountRepository, ledger: FakeLedgerRepository
+    ) -> None:
+        self.accounts = accounts
+        self.ledger = ledger
         self.committed = False
         self.rolled_back = False
 
@@ -81,12 +80,8 @@ class FakeUnitOfWork:
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> bool:
-        if not self.committed:
+        if exc_type is None:
+            self.committed = True
+        else:
             self.rolled_back = True
         return False  # never suppress exceptions
-
-    async def commit(self) -> None:
-        self.committed = True
-
-    async def rollback(self) -> None:
-        self.rolled_back = True
