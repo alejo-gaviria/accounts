@@ -1,10 +1,7 @@
 """FastAPI dependencies: auth guard and Idempotency-Key extraction.
 
-The UnitOfWork/use-case factory used to live here too; it now lives in
-AccountBalanceContainer (adapters/config/container.py) per the
-dependency-injector refactor (design.md "Dependency Injection") —
-routes resolve those via `@inject` + `Provide[...]`, not through a
-plain FastAPI `Depends(get_unit_of_work)` function.
+Use cases are resolved via AccountBalanceContainer (adapters/config/container.py),
+not through a plain FastAPI dependency function.
 """
 
 from fastapi import Header, HTTPException
@@ -17,13 +14,9 @@ async def require_api_key(
 ) -> None:
     """v1/local-only placeholder auth guard: a single shared static key
     compared in plain Python — no hashing, no rotation, no per-client
-    scoping, no rate limiting.
-
-    NOT PRODUCTION-GRADE. This exists only so the service isn't
-    completely open locally. Replace with real credential issuance
-    (JWT / proper service-to-service auth, per design.md's "Security"
-    section deferred items) before deploying anywhere that isn't purely
-    local development. Tracked in README.md "Known risks".
+    scoping, no rate limiting. NOT PRODUCTION-GRADE — replace with real
+    credential issuance before deploying anywhere that isn't purely
+    local development.
     """
     if x_api_key is None or x_api_key != settings.api_key:
         raise HTTPException(

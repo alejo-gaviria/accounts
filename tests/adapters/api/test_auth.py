@@ -1,8 +1,6 @@
-"""RED -> GREEN: X-API-Key placeholder auth guard on mutation routes.
-
-Tasks.md 6.1/6.2: requests without/with-wrong X-API-Key -> 401. GET
-(read-only) is intentionally NOT guarded (design.md: "guarding all
-mutation routes").
+"""X-API-Key placeholder auth guard on mutation routes: requests
+without/with-wrong X-API-Key get 401. GET (read-only) is intentionally
+not guarded.
 """
 
 from uuid import uuid4

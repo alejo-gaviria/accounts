@@ -1,11 +1,8 @@
 """DBO (Database Object) for the `ledger_entries` table — immutable,
-append-only. Mirrors the DDL in the initial migration
-(migrations/versions/3f8f816fa633_create_accounts_and_ledger_entries.py
-and design.md's "Domain Model + DB Schema").
+append-only.
 
-Kept 1:1 with the hand-written migration rather than the other way
-around — this project doesn't autogenerate revisions from these DBOs
-(see migrations/env.py).
+Kept 1:1 with the hand-written migrations rather than the other way
+around — this project doesn't autogenerate revisions from these DBOs.
 """
 
 import uuid
@@ -48,12 +45,10 @@ class LedgerEntryRow(Base):
     currency: Mapped[str] = mapped_column(
         sa.CHAR(3), nullable=False, server_default="MXN"
     )
-    # Currency Conversion audit columns (design.md) - what the caller
-    # actually requested, before conversion to the canonical MXN amount
-    # above. fx_rate defaults to 1 (the "no conversion happened" case);
-    # original_amount/original_currency have no DB-level default since
-    # they should always be explicitly supplied by the application
-    # layer (see application/use_cases/{credit,debit,transfer}.py).
+    # Audit columns: what the caller actually requested, before
+    # conversion to the canonical MXN amount above. fx_rate defaults to
+    # 1 (no conversion); original_amount/original_currency have no
+    # DB-level default since they must always be supplied explicitly.
     original_amount: Mapped[Decimal] = mapped_column(sa.Numeric(20, 4), nullable=False)
     original_currency: Mapped[str] = mapped_column(sa.CHAR(3), nullable=False)
     fx_rate: Mapped[Decimal] = mapped_column(

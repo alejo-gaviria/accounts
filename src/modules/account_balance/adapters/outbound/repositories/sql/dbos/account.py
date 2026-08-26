@@ -1,11 +1,8 @@
 """DBO (Database Object) for the `accounts` table — the aggregate +
-balance projection row. Mirrors the DDL in the initial migration
-(migrations/versions/3f8f816fa633_create_accounts_and_ledger_entries.py
-and design.md's "Domain Model + DB Schema").
+balance projection row.
 
-Kept 1:1 with the hand-written migration rather than the other way
-around — this project doesn't autogenerate revisions from these DBOs
-(see migrations/env.py).
+Kept 1:1 with the hand-written migrations rather than the other way
+around — this project doesn't autogenerate revisions from these DBOs.
 """
 
 import uuid

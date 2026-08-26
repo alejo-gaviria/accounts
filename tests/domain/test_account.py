@@ -1,9 +1,7 @@
-"""RED -> GREEN for the Account aggregate's core invariant.
-
-Spec: account-balance-ledger / balance-mutation-api - a debit/transfer
-leg that would take balance below zero must be rejected with no state
-change (InsufficientFunds), and a valid credit/debit must append a
-ledger entry whose balance_after matches the new aggregate balance.
+"""Account aggregate tests: a debit/transfer leg that would take
+balance below zero is rejected with no state change (InsufficientFunds);
+a valid credit/debit appends a ledger entry whose balance_after matches
+the new aggregate balance.
 """
 
 from decimal import Decimal
@@ -44,7 +42,6 @@ def test_debit_resulting_in_negative_balance_is_rejected():
     with pytest.raises(InsufficientFunds):
         account.apply_debit(Money(Decimal("10.01")), idempotency_key="key-3")
 
-    # No state change on rejection.
     assert account.balance == Decimal("10.00")
     assert account.version == 0
 

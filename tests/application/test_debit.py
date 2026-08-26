@@ -1,8 +1,6 @@
-"""RED -> GREEN: debit use case.
-
-Spec: balance-mutation-api / Insufficient funds on debit/transfer -
-rejected with no state change (no ledger entry created, no balance
-change, transaction rolled back).
+"""Debit use case tests: insufficient funds rejects with no state
+change (no ledger entry created, no balance change, transaction rolled
+back).
 """
 
 from decimal import Decimal

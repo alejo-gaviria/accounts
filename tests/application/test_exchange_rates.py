@@ -1,8 +1,5 @@
-"""RED -> GREEN: StaticExchangeRates.
-
-Spec: currency-conversion / "Only Currencies In The Static Table Are
-Accepted" - all 5 v1-supported currencies resolve; anything else
-raises UnsupportedCurrency.
+"""StaticExchangeRates tests: all 5 supported currencies resolve to
+their hardcoded rate; anything else raises UnsupportedCurrency.
 """
 
 from decimal import Decimal

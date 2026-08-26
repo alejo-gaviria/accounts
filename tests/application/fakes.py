@@ -1,15 +1,9 @@
 """In-memory test doubles for the application-layer ports.
 
-Phase 4's focused test command is `pytest tests/domain tests/application`
-with no live infra ("N/A — pure logic, no live infra needed" per the
-tasks.md Suggested Work Units table) — these fakes are what make that
-possible. The real Postgres-backed adapters are Phase 5.
-
 FakeUnitOfWork mirrors the real SqlUnitOfWork's shape: `.accounts`/
-`.ledger` are set (here, passed straight through rather than
-constructed in `__aenter__`, since fakes need no session/logger to
-build), and `__aexit__`'s commit/rollback outcome is exception-driven,
-same as the real one — no ambient state anywhere in either.
+`.ledger` are set directly (fakes need no session/logger to build), and
+`__aexit__`'s commit/rollback outcome is exception-driven, same as the
+real one.
 """
 
 from uuid import UUID

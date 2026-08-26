@@ -1,11 +1,8 @@
-"""RED -> GREEN: POST /v1/accounts — dev/test convenience endpoint.
-
-NOT a spec scenario (not a real onboarding/business capability) - just
-behavioral coverage for the tooling: happy path creates a fresh account
-and returns 201, and a negative initial_balance is rejected the same
-way credit/debit reject a negative amount (400, InvalidAmount, same
-error body shape). No `currency` field at all (Currency Conversion,
-design.md) — every account is MXN by construction.
+"""POST /v1/accounts tests — dev/test convenience endpoint: happy path
+creates a fresh account and returns 201; a negative initial_balance is
+rejected the same way credit/debit reject a negative amount (400,
+InvalidAmount, same error body shape). No `currency` field at all —
+every account is MXN by construction.
 """
 
 from decimal import Decimal
@@ -42,9 +39,8 @@ async def test_create_account_with_initial_balance(client, valid_headers):
 async def test_create_account_ignores_a_currency_field_if_sent(
     client, valid_headers
 ):
-    # CreateAccountRequest has no currency field at all - Pydantic
-    # silently drops unknown fields, so this must NOT change the
-    # outcome: still MXN, regardless of what the caller sends.
+    # Pydantic silently drops unknown fields, so this must not change
+    # the outcome: still MXN, regardless of what the caller sends.
     resp = await client.post(
         "/v1/accounts",
         json={"currency": "USD", "initial_balance": "10.00"},

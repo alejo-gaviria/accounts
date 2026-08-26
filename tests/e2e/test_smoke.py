@@ -1,11 +1,7 @@
-"""E2E smoke test (task 7.3): boots the real `src.main:app`, wired
-through the real SqlUnitOfWork/SQL repos against Postgres - no fakes
-anywhere - and exercises credit, debit, transfer, and get.
-
-NOT executed in this sandbox (Docker daemon unreachable - see
-apply-progress in Engram / the apply return envelope). Self-skips via
-the shared `engine` fixture when db-test isn't reachable, same as
-tests/adapters/sql.
+"""E2E smoke test: boots the real app, wired through the real
+SqlUnitOfWork/SQL repos against Postgres — no fakes anywhere — and
+exercises credit, debit, transfer, and get. Self-skips via the shared
+`engine` fixture when db-test isn't reachable.
 """
 
 from decimal import Decimal

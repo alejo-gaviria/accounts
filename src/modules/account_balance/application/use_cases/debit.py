@@ -1,17 +1,8 @@
 """Debit use case.
 
-Spec: balance-mutation-api / Insufficient funds on debit/transfer -
-rejected with no state change; balance-mutation-api / Successful
-credit's debit counterpart otherwise.
-
-House convention (design.md "Dependency Injection"): class with its
-UnitOfWork injected via constructor, wired via AccountBalanceContainer
-as a `providers.Factory`.
-
-Currency Conversion (design.md): converted to MXN once via
-StaticExchangeRates at the very start of execute(), before opening the
-unit of work — the insufficient-funds check happens post-conversion,
-in MXN, against the account's MXN balance.
+Amount/currency are converted to MXN once, before the unit of work
+opens — the insufficient-funds check happens post-conversion, against
+the account's MXN balance.
 """
 
 from decimal import Decimal
@@ -53,10 +44,8 @@ class DebitAccountUseCase:
                 return existing
 
             # May raise InsufficientFunds — propagates out of this
-            # `async with` block, so the UoW's __aexit__ rolls back
-            # (exception present), with no ledger row ever constructed
-            # or appended (spec: "no state change"). The check is
-            # against the account's MXN balance, post-conversion.
+            # `async with` block, so the UoW rolls back with no ledger
+            # row ever constructed or appended.
             entry = account.apply_debit(
                 money,
                 idempotency_key,

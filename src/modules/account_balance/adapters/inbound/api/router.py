@@ -1,10 +1,10 @@
 """Inbound HTTP API — credit/debit/transfer/get, the source of truth
-for balance mutations (spec: balance-mutation-api).
+for balance mutations.
 
 Use cases are resolved through AccountBalanceContainer via `@inject` +
-`Provide[...]` (design.md "Dependency Injection") — routes never
-import/construct use-case classes directly. The container is wired to
-this module in src/main.py's `create_app()` at startup.
+`Provide[...]` — routes never import/construct use-case classes
+directly. The container is wired to this module in
+src/infrastructure/main.py's `create_app()` at startup.
 """
 
 from uuid import UUID
@@ -175,11 +175,8 @@ async def create_dummy_account(
 ) -> AccountResponse:
     """Dev/test convenience only — NOT a real account-onboarding flow.
 
-    Inserts a fresh `accounts` row so credit/debit/transfer can be
-    smoke-tested without hand-seeding via `psql`. No Idempotency-Key
-    required (unlike the mutation endpoints) — a duplicate call just
-    creates another dummy account, which is the expected/harmless
-    behavior for a test-seeding helper, not a real business operation.
+    No Idempotency-Key required (unlike the mutation endpoints) — a
+    duplicate call just creates another dummy account.
     """
     try:
         account = await use_case.execute(body.initial_balance)
@@ -196,11 +193,8 @@ async def get_account(
     account_id: UUID,
     uow: UnitOfWork = Depends(Provide[AccountBalanceContainer.unit_of_work_provider]),
 ) -> AccountResponse:
-    # No dedicated read use case for a single-repo lookup (no separate
-    # non-locking read method exists on the port either — see
-    # account_repo.py); reuses get_for_update(). Normal return commits
-    # the (read-only, nothing-mutated) transaction, releasing the lock -
-    # same effect as an explicit rollback would have had here.
+    # No non-locking read method exists on the port, so this reuses
+    # get_for_update() and just commits the read-only transaction.
     try:
         async with uow as uow:
             account = await uow.accounts.get_for_update(account_id)

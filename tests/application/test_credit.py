@@ -1,12 +1,6 @@
-"""RED -> GREEN: credit use case.
-
-Spec: balance-mutation-api / Successful credit - balance increases by
-the amount and a ledger entry is created.
-
-Instantiates CreditAccountUseCase directly with a FakeUnitOfWork
-(itself built from fake repos) and a real StaticExchangeRates (pure/
-stateless, no reason to fake it) - the whole point of the DI refactor:
-no container needed for a pure unit test.
+"""Credit use case tests. Instantiates CreditAccountUseCase directly
+with a FakeUnitOfWork and a real StaticExchangeRates (pure/stateless,
+no reason to fake it) — no container needed for a pure unit test.
 """
 
 from decimal import Decimal
@@ -107,7 +101,6 @@ async def test_credit_with_unsupported_currency_is_rejected_before_any_db_work()
     with pytest.raises(UnsupportedCurrency):
         await use_case.execute(account.id, Decimal("10.00"), "EUR", "key-5")
 
-    # Rejected before the account was even locked/looked up.
     assert accounts.lock_order == []
     assert account.balance == Decimal("10.00")
     assert ledger.entries == []

@@ -1,8 +1,6 @@
-"""RED -> GREEN: mutation validation + error-to-HTTP mapping.
-
-Spec: balance-mutation-api / Mutation Validation scenarios. Design:
-400 InvalidAmount, 404 UnknownAccount, 409 InsufficientFunds, error
-body shape {error: {code, message}}.
+"""Mutation validation + error-to-HTTP mapping tests: 400 InvalidAmount,
+404 UnknownAccount, 409 InsufficientFunds, error body shape
+{error: {code, message}}.
 """
 
 from decimal import Decimal

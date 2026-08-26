@@ -1,13 +1,8 @@
-"""RED -> GREEN: idempotent replay.
-
-Spec: idempotency / Duplicate request returns original result - no new
-ledger entry is created and the original result is returned.
-
-Note on commit/rollback semantics: a replay detects the existing entry
-BEFORE mutating anything and returns normally (no exception) - the
-UnitOfWork's exception-driven __aexit__ therefore commits (an empty,
-no-op transaction, since nothing was pending). That's correct, not a
-bug: a replay is a successful outcome, not an error.
+"""Idempotent replay tests: a duplicate request returns the original
+result — no new ledger entry is created. A replay detects the existing
+entry before mutating anything and returns normally, so the UnitOfWork
+commits (an empty, no-op transaction) rather than rolling back — a
+replay is a successful outcome, not an error.
 """
 
 from decimal import Decimal
@@ -45,11 +40,8 @@ async def test_duplicate_idempotency_key_returns_original_result_no_reapply():
     use_case_2 = CreditAccountUseCase(uow2, StaticExchangeRates())
     second = await use_case_2.execute(account.id, Decimal("5.00"), "MXN", "same-key")
 
-    # Same result returned, balance NOT mutated a second time.
     assert second is first
     assert account.balance == Decimal("15.00")
     assert len(ledger.entries) == 1
-    # Replay is a successful (non-exceptional) outcome - the UoW commits
-    # an empty transaction, it does not roll back.
     assert uow2.committed is True
     assert uow2.rolled_back is False

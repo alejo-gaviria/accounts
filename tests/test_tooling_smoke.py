@@ -1,8 +1,5 @@
-"""Smoke test proving the pytest + pytest-asyncio toolchain is wired up.
-
-This is intentionally infra-free: it exists to prove task 1.2 (test runner
-setup) before any domain/application code exists. Domain and application
-tests are added in the following phase following RED -> GREEN.
+"""Smoke test proving the pytest + pytest-asyncio toolchain is wired
+up. Intentionally infra-free.
 """
 
 import pytest

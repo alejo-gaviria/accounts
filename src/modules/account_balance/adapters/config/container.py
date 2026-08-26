@@ -1,23 +1,14 @@
-"""DI wiring for the account_balance module (design.md "Dependency
-Injection" — project convention, `dependency-injector`,
-`SharedContainer`-style: `providers.Singleton` for stateful/shared
-things, `providers.Factory` for per-request instances).
+"""DI wiring for the account_balance module: `providers.Singleton` for
+stateful/shared things, `providers.Factory` for per-request instances.
 
-Everything is injected, nothing ambient — including the DB session and
-the logger. Repositories are deliberately NOT wired here as
-container-level providers: a singleton repo can't safely hold a
-per-request DB session/transaction. Instead only `session_factory_provider`
-(Singleton — reuses src/infrastructure/db.py's existing
-async_sessionmaker/engine setup) and `logger_provider` (Factory) are
-injected into
-`unit_of_work_provider` (Factory — a fresh SqlUnitOfWork, and therefore
-a fresh transaction, per resolution). SqlUnitOfWork.__aenter__
-constructs SqlAccountRepository/SqlLedgerRepository itself, passing
-them the session + logger — see unit_of_work.py's port docstring.
-
-Scope stays local to this module: session factory, UoW, use cases only
-— no AWS/S3/SNS/SQS/Redis/JWT providers, none of those are v1 scope
-here.
+Repositories are deliberately NOT wired here as container-level
+providers: a singleton repo can't safely hold a per-request DB
+session/transaction. Instead `session_factory_provider` (Singleton)
+and `logger_provider` (Factory) are injected into `unit_of_work_provider`
+(Factory — a fresh SqlUnitOfWork, and therefore a fresh transaction,
+per resolution). SqlUnitOfWork.__aenter__ constructs
+SqlAccountRepository/SqlLedgerRepository itself, passing them the
+session + logger.
 """
 
 import logging
@@ -44,13 +35,8 @@ from src.modules.account_balance.application.use_cases.transfer import TransferU
 
 
 class AccountBalanceContainer(containers.DeclarativeContainer):
-    # Named (not root) logger, still injected rather than grabbed via a
-    # module-level `logging.getLogger(__name__)` anywhere in this module.
     logger_provider = providers.Factory(logging.getLogger, "account_balance")
 
-    # Wraps the sessionmaker/engine already set up in
-    # src/infrastructure/db.py (which connects as the restricted
-    # accounts_app role) rather than building a second one here.
     session_factory_provider = providers.Object(async_session_factory)
 
     unit_of_work_provider = providers.Factory(
@@ -59,9 +45,7 @@ class AccountBalanceContainer(containers.DeclarativeContainer):
         logger=logger_provider,
     )
 
-    # Pure/stateless (design.md "Currency Conversion") - safe as a
-    # Singleton unlike the repositories, since it holds no per-request
-    # DB session.
+    # Pure/stateless, safe as a Singleton unlike the repositories.
     exchange_rates_provider = providers.Singleton(StaticExchangeRates)
 
     credit_use_case_provider = providers.Factory(
@@ -79,8 +63,6 @@ class AccountBalanceContainer(containers.DeclarativeContainer):
         uow=unit_of_work_provider,
         exchange_rates=exchange_rates_provider,
     )
-    # Dev/test convenience only - see CreateDummyAccountUseCase's
-    # docstring. Wired identically to the other use cases.
     create_dummy_account_use_case_provider = providers.Factory(
         CreateDummyAccountUseCase,
         uow=unit_of_work_provider,

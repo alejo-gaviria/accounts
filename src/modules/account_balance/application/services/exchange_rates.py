@@ -1,17 +1,9 @@
-"""Static currency conversion — no external API (design.md "Currency
-Conversion", explicit user request to keep this simple: no Banxico
-integration, no HTTP call, no caching, no network-failure handling).
+"""Static currency conversion: a hardcoded rate table, no external API,
+no HTTP call, no caching, no network-failure handling.
 
-Deviation from design.md's illustrative code sketch, disclosed
-explicitly: `UnsupportedCurrency` is NOT a bespoke `Exception` defined
-in this module (as the sketch showed) - it lives in domain/errors.py
-alongside InsufficientFunds/InvalidAmount/UnknownAccount, per the
-explicit instruction to add it there. This also keeps it consistent
-with everything else in this codebase: router.py's error-to-HTTP
-mapping (_DOMAIN_ERROR_HTTP_STATUS) is a single dict keyed on
-domain.errors types, and duplicating that pattern for a one-off
-exception class defined elsewhere would have been inconsistent with
-every other domain error in this module.
+`UnsupportedCurrency` lives in domain/errors.py alongside the other
+domain errors, since router.py's error-to-HTTP mapping is a single
+dict keyed on domain.errors types.
 """
 
 from decimal import Decimal

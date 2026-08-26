@@ -1,21 +1,11 @@
 """Transfer use case.
 
-Spec: balance-mutation-api / Successful transfer - source debits and
-destination credits atomically with two linked ledger entries.
-Design: both account locks acquired in ascending-id order (deadlock
-avoidance for concurrent opposite-direction transfers); both legs share
-one transfer_id; per-leg idempotency keys are derived from the single
-request Idempotency-Key (here: f"{key}#debit" / f"{key}#credit").
-
-House convention (design.md "Dependency Injection"): class with its
-UnitOfWork injected via constructor, wired via AccountBalanceContainer
-as a `providers.Factory`.
-
-Currency Conversion (design.md): converted to MXN ONCE, at the very
-start of execute(), using the request's currency — both legs apply the
-same converted MXN amount. No per-leg re-conversion, since both
-accounts are MXN-denominated now (there's no "accounts differ" case
-transfer used to need to guard against).
+Both account locks are acquired in ascending-id order to avoid
+deadlocking against a concurrent transfer running in the opposite
+direction between the same two accounts. Both legs share one
+transfer_id; per-leg idempotency keys are derived from the single
+request Idempotency-Key. Amount/currency are converted to MXN once,
+before either leg is applied, since every account is MXN-denominated.
 """
 
 from dataclasses import dataclass
@@ -60,9 +50,6 @@ class TransferUseCase:
         debit_key = f"{idempotency_key}#debit"
         credit_key = f"{idempotency_key}#credit"
 
-        # Deterministic (ascending id) lock order avoids deadlocking
-        # against a concurrent transfer running in the opposite
-        # direction between the same two accounts.
         first_id, second_id = sorted((from_account_id, to_account_id))
 
         async with self._uow as uow:

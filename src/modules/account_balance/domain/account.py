@@ -1,10 +1,10 @@
 """Account aggregate: owns the balance invariant (balance >= 0) and
 produces LedgerEntry rows for its own mutations.
 
-This is a pure in-memory aggregate — persistence (the SELECT ... FOR
-UPDATE lock, the INSERT/UPDATE pair, the transaction boundary) is owned
-by the application layer's use cases and the SQL unit of work
-(design.md "Concurrency + Idempotency Protocol"), not by this class.
+This is a pure in-memory aggregate — persistence (locking, the
+insert/update pair, the transaction boundary) is owned by the
+application layer's use cases and the SQL unit of work, not by this
+class.
 """
 
 from dataclasses import dataclass, field
@@ -24,13 +24,8 @@ class Account:
     version: int = 0
 
     def __post_init__(self) -> None:
-        # Mirrors the DB-level `balance NUMERIC(20,4) CHECK (balance >= 0)`
-        # constraint. Unlike Money (used for mutation amounts, which must
-        # be strictly > 0), a starting/current balance of exactly 0 is
-        # valid — only negative is rejected. This matters now that
-        # CreateDummyAccountUseCase constructs a fresh Account with a
-        # caller-supplied balance; every other construction path
-        # (hydrating from a DB row) already satisfies this trivially.
+        # Unlike Money (mutation amounts, which must be strictly > 0), a
+        # balance of exactly 0 is valid — only negative is rejected.
         if self.balance < 0:
             raise InvalidAmount(self.balance)
 
@@ -43,13 +38,9 @@ class Account:
         original_currency: str = "MXN",
         fx_rate: Decimal = Decimal("1"),
     ) -> LedgerEntry:
-        # original_amount/original_currency/fx_rate are audit-only
-        # (design.md "Currency Conversion") - this method doesn't
-        # perform or know about any conversion itself, it just threads
-        # through whatever the caller already computed (see
-        # application/use_cases/credit.py). Left at their defaults,
-        # this behaves exactly as before conversion existed: the
-        # ledger row simply records that no conversion happened.
+        # original_amount/original_currency/fx_rate are audit-only; this
+        # method doesn't perform currency conversion, it only records
+        # whatever the caller already computed.
         new_balance = self.balance + money.amount
         entry = LedgerEntry(
             account_id=self.id,

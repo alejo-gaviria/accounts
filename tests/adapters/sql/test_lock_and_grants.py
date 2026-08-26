@@ -1,14 +1,8 @@
-"""Integration tests against a real Postgres (db-test compose service).
-
-Spec: account-balance-ledger / "Ledger row cannot be altered" - the
-app's DB role must not be able to UPDATE/DELETE ledger_entries.
-Spec: concurrency-safety / "Concurrent mutations serialize correctly" -
-SELECT ... FOR UPDATE on the account row.
-
-NOT executed in the sandbox this change was authored in (Docker daemon
-unreachable there - see apply-progress); written and reasoned through
-against documented SQLAlchemy/asyncpg/Postgres behavior, and will
-self-skip (not fail) wherever `db-test` isn't reachable.
+"""Integration tests against a real Postgres (db-test compose service):
+the app's DB role must not be able to UPDATE/DELETE ledger_entries, and
+concurrent mutations on the same account must serialize via
+`SELECT ... FOR UPDATE`. Self-skips (not fails) wherever `db-test`
+isn't reachable.
 """
 
 import asyncio
@@ -98,12 +92,10 @@ async def test_ledger_entries_insert_and_select_allowed_for_app_role(
 async def test_get_for_update_blocks_a_second_lock_on_the_same_account(
     engine, session_factory
 ):
-    """SqlAccountRepository is a plain class taking its session via the
-    constructor (DI refactor - no singleton, no ambient/contextvar
-    state) - two "concurrent" transactions are simulated here with two
-    separate sessions, each with its own repository instance, exactly
-    like two different SqlUnitOfWork.__aenter__ calls for two different
-    requests would produce.
+    """Two "concurrent" transactions are simulated with two separate
+    sessions, each with its own repository instance, exactly like two
+    different SqlUnitOfWork.__aenter__ calls for two different requests
+    would produce.
     """
     account_id = uuid4()
     async with engine.begin() as conn:

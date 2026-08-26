@@ -1,8 +1,6 @@
-"""RED -> GREEN for LedgerEntry immutability and Money validation.
-
-Spec: account-balance-ledger requires ledger rows to be append-only; the
-in-process mirror of that invariant is that LedgerEntry cannot be
-mutated after construction.
+"""LedgerEntry immutability and Money validation tests. Ledger rows are
+append-only; the in-process mirror of that invariant is that
+LedgerEntry cannot be mutated after construction.
 """
 
 import dataclasses

@@ -1,12 +1,7 @@
-"""E2E fixtures: the REAL FastAPI app (src.main:app), REAL SqlUnitOfWork
-(which builds REAL SqlAccountRepository/SqlLedgerRepository fresh in
-its own __aenter__) - only the DB connection target is swapped, from
-the dev `db` service to the test-db `engine`/`app_role_engine_url`
-fixtures in the root conftest. Only `unit_of_work_provider` needs
-overriding (to a session factory pointed at db-test, plus a logger -
-SqlUnitOfWork's constructor requires both) - there is no separate
-repository provider to override, since repos are never resolved from
-the container directly.
+"""E2E fixtures: the real FastAPI app and real SqlUnitOfWork/repos —
+only the DB connection target is swapped, from the dev `db` service to
+the test-db `engine`/`app_role_engine_url` fixtures in the root
+conftest.
 """
 
 import logging

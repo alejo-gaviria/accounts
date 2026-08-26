@@ -1,15 +1,10 @@
 """Money value object: a positive amount with a currency code.
 
-Mirrors the DB-level `amount NUMERIC(20,4) CHECK (amount > 0)` constraint
-on `ledger_entries` (design.md) — Money always represents a positive
-mutation magnitude; direction (credit/debit) is carried separately by
-`EntryType` on `LedgerEntry`.
-
-Since the "Currency Conversion" capability, every Money the domain
-layer ever sees is already MXN (post-conversion) — the application
-layer's use cases convert a request's original amount/currency to MXN
-via StaticExchangeRates before constructing a Money at all. currency
-defaults to "MXN" accordingly (was "USD" pre-conversion).
+Always a positive mutation magnitude; direction (credit/debit) is
+carried separately by `EntryType` on `LedgerEntry`. Every Money the
+domain layer sees is already MXN — the application layer converts a
+request's original amount/currency to MXN via StaticExchangeRates
+before constructing a Money at all.
 """
 
 from dataclasses import dataclass

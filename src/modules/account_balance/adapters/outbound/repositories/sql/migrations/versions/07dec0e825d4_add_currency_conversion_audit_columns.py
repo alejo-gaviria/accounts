@@ -4,11 +4,11 @@ Revision ID: 07dec0e825d4
 Revises: 3f8f816fa633
 Create Date: 2026-08-26 15:58:08.631804
 
-Additive schema change for the "Currency Conversion" capability
-(design.md) — does NOT edit the already-applied 3f8f816fa633 migration.
-Every account balance is now canonically MXN; ledger_entries.amount
-stays MXN (post-conversion) and gains three audit-only columns
-recording what the caller actually requested before conversion.
+Additive schema change — does NOT edit the already-applied 3f8f816fa633
+migration. Every account balance is now canonically MXN;
+ledger_entries.amount stays MXN (post-conversion) and gains three
+audit-only columns recording what the caller actually requested before
+conversion.
 """
 from typing import Sequence, Union
 

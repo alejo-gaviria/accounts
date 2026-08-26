@@ -1,23 +1,11 @@
 """Credit use case.
 
-Spec: balance-mutation-api / Successful credit.
-Protocol (design.md): lock account -> check idempotency -> compute +
-append ledger entry -> save balance. Normal return commits (via the
-UoW's exception-driven __aexit__); a propagating domain error rolls
-back.
-
-House convention (design.md "Dependency Injection"): a class with its
-UnitOfWork injected via constructor, wired through
-AccountBalanceContainer as a `providers.Factory` — never a plain
-function. The operation itself lives on `.execute(...)`.
-
-Currency Conversion (design.md): the caller's requested amount/currency
-are converted to MXN via StaticExchangeRates ONCE, at the very start of
-execute() — before opening the unit of work at all, so an unsupported
-currency never even takes a DB lock. Everything after that point (the
-domain, the repositories) operates purely in MXN, unaware conversion
-ever happened; the original request values are threaded through only
-for the ledger's audit columns.
+Amount/currency are converted to MXN once, before the unit of work
+even opens, so an unsupported currency never takes a DB lock.
+Everything after that point operates purely in MXN; the original
+request values are threaded through only for the ledger's audit
+columns. A normal return commits (via the UoW's exception-driven
+__aexit__); a propagating domain error rolls back.
 """
 
 from decimal import Decimal
@@ -53,13 +41,10 @@ class CreditAccountUseCase:
         async with self._uow as uow:
             account = await uow.accounts.get_for_update(account_id)
 
-            # Check-then-mutate: the FOR UPDATE lock above already
-            # serializes concurrent requests for this account, so
-            # checking for an existing entry BEFORE mutating the
-            # aggregate is race-safe (design.md ordering note) and
-            # avoids mutating `account` for a request that turns out to
-            # be a pure replay. Nothing pending -> normal return just
-            # commits an empty (no-op) transaction.
+            # The row lock above serializes concurrent requests for this
+            # account, so checking for an existing entry before mutating
+            # the aggregate is race-safe and avoids mutating `account`
+            # for a request that turns out to be a pure replay.
             existing = await uow.ledger.find_by_idempotency_key(
                 account_id, idempotency_key
             )

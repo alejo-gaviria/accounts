@@ -3,7 +3,7 @@
 Insert/select only by design — mirrors the DB-level append-only grant
 (no UPDATE/DELETE methods exist on this contract at all, let alone are
 implemented). Concrete implementation lives in
-adapters/outbound/repositories/sql/ledger_repo.py (Phase 5).
+adapters/outbound/repositories/sql/ledger_repo.py.
 """
 
 from typing import Protocol
@@ -15,11 +15,8 @@ from src.modules.account_balance.domain.ledger_entry import LedgerEntry
 class DuplicateIdempotencyKey(Exception):
     """Raised by append() when (account_id, idempotency_key) already
     exists — the DB unique constraint `uq_ledger_acct_idem` was hit.
-
     This is how the SQL adapter surfaces a Postgres unique_violation to
-    the application layer (design.md "Concurrency + Idempotency
-    Protocol": insert-first, let the unique constraint be the race
-    arbiter).
+    the application layer.
     """
 
     def __init__(self, account_id: UUID, idempotency_key: str) -> None:

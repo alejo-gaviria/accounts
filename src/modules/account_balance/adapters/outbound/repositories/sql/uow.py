@@ -17,9 +17,10 @@ from src.modules.account_balance.adapters.outbound.repositories.sql.account_repo
 from src.modules.account_balance.adapters.outbound.repositories.sql.ledger_repo import (
     SqlLedgerRepository,
 )
+from src.modules.account_balance.application.gateways.unit_of_work import UnitOfWork
 
 
-class SqlUnitOfWork:
+class SqlUnitOfWork(UnitOfWork):
     def __init__(
         self,
         session_factory: async_sessionmaker[AsyncSession],

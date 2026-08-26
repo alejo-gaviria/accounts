@@ -1,12 +1,9 @@
 """In-process API test fixtures.
 
-Uses the REAL wired app (src.main.app) and overrides the container's
+Uses the real wired app and overrides the container's
 `unit_of_work_provider` with a Factory that builds a fresh
-FakeUnitOfWork (fresh .committed/.rolled_back per "request", same as a
-real fresh transaction) sharing the SAME fake accounts/ledger stores
-across requests within one test - dependency-injector's own supported
-testing pattern (provider.override(...)/reset_override()). No live DB
-needed.
+FakeUnitOfWork per request, sharing the same fake accounts/ledger
+stores across requests within one test. No live DB needed.
 """
 
 import pytest

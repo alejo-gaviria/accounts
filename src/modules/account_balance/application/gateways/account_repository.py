@@ -1,9 +1,9 @@
 """Port: AccountRepository.
 
 Concrete implementation lives in
-adapters/outbound/repositories/sql/account_repo.py (Phase 5) and performs
-a real `SELECT ... FOR UPDATE`. This Protocol is what the application
-layer's use cases depend on, and what test doubles implement.
+adapters/outbound/repositories/sql/account_repo.py and performs a real
+`SELECT ... FOR UPDATE`. This Protocol is what the application layer's
+use cases depend on, and what test doubles implement.
 """
 
 from typing import Protocol

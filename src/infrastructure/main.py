@@ -1,7 +1,7 @@
 """FastAPI application factory / entrypoint.
 
-Local: `uvicorn src.main:app --reload`
-Container: see Dockerfile (`CMD ["uvicorn", "src.main:app", ...]`).
+Local: `uvicorn src.infrastructure.main:app --reload`
+Container: see Dockerfile.
 """
 
 from fastapi import FastAPI

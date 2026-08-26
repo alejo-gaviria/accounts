@@ -1,13 +1,7 @@
-"""RED -> GREEN: CreateDummyAccountUseCase.
-
-Dev/test convenience only - see the use case's docstring. Not a spec
-scenario (spec.md has no "account creation" domain — this is tooling,
-not a business capability), so there's no spec reference here, just
-behavioral coverage: inserts a fresh row with the given/defaulted
-initial_balance (every account is MXN by construction, no currency
-param at all - Currency Conversion, design.md), and rejects a negative
-initial_balance via the same InvalidAmount domain error credit/debit
-already use.
+"""CreateDummyAccountUseCase tests: inserts a fresh row with the
+given/defaulted initial_balance (every account is MXN by construction,
+no currency param), and rejects a negative initial_balance via the
+same InvalidAmount domain error credit/debit use.
 """
 
 from decimal import Decimal

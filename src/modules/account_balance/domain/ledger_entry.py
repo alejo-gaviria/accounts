@@ -1,18 +1,15 @@
 """Immutable LedgerEntry — the in-process mirror of an append-only
-`ledger_entries` row (design.md schema).
+`ledger_entries` row.
 
 Frozen by construction: once created it cannot be mutated, matching the
-spec requirement that ledger rows are never UPDATEd/DELETEd.
+requirement that ledger rows are never updated or deleted.
 
-original_amount/original_currency/fx_rate (design.md "Currency
-Conversion") are audit-only columns: `amount` is always MXN
-post-conversion, but reconstructing "what did the caller actually
-send" from an MXN-only amount would otherwise be impossible - which
-matters for an immutable financial ledger. original_currency/fx_rate
+original_amount/original_currency/fx_rate are audit-only columns:
+`amount` is always MXN post-conversion, but reconstructing what the
+caller actually sent from an MXN-only amount would otherwise be
+impossible for an immutable financial ledger. original_currency/fx_rate
 default to the "no conversion happened" case (MXN, rate 1);
-original_amount has no such default - callers must state it explicitly
-(see domain/account.py's apply_credit/apply_debit, which default it to
-`money.amount` when not given).
+original_amount has no such default since it varies per call.
 """
 
 from dataclasses import dataclass, field

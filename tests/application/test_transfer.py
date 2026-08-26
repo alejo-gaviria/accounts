@@ -1,12 +1,8 @@
-"""RED -> GREEN: transfer use case.
-
-Spec: balance-mutation-api / Successful transfer - source debits and
-destination credits atomically with two linked ledger entries.
-Design: both account locks acquired in ascending-id order so opposite-
-direction concurrent transfers can't deadlock. Currency Conversion:
-converted once, using the request currency - both legs apply the same
-converted MXN amount (no per-leg re-conversion, no "accounts differ"
-case since every account is MXN).
+"""Transfer use case tests: source debits and destination credits
+atomically with two linked ledger entries; both account locks are
+acquired in ascending-id order so opposite-direction concurrent
+transfers can't deadlock; amount/currency are converted once and both
+legs apply the same converted MXN amount.
 """
 
 from decimal import Decimal
