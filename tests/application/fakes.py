@@ -27,6 +27,7 @@ class FakeAccountRepository:
         self._accounts = accounts
         self.lock_order: list[UUID] = []
         self.saved: list[Account] = []
+        self.created: list[Account] = []
 
     async def get_for_update(self, account_id: UUID) -> Account:
         self.lock_order.append(account_id)
@@ -37,6 +38,10 @@ class FakeAccountRepository:
 
     async def save(self, account: Account) -> None:
         self.saved.append(account)
+        self._accounts[account.id] = account
+
+    async def create(self, account: Account) -> None:
+        self.created.append(account)
         self._accounts[account.id] = account
 
 

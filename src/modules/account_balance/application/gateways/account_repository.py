@@ -23,3 +23,10 @@ class AccountRepository(Protocol):
     async def save(self, account: Account) -> None:
         """Persist the account's current balance/version (UPDATE)."""
         ...
+
+    async def create(self, account: Account) -> None:
+        """Insert a brand-new account row (dev/test convenience only —
+        see application/use_cases/create_dummy_account.py). No locking
+        needed: this is a fresh row, not a mutation of an existing one.
+        """
+        ...

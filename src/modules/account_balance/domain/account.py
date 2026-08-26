@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from src.modules.account_balance.domain.errors import InsufficientFunds
+from src.modules.account_balance.domain.errors import InsufficientFunds, InvalidAmount
 from src.modules.account_balance.domain.ledger_entry import EntryType, LedgerEntry
 from src.modules.account_balance.domain.money import Money
 
@@ -22,6 +22,17 @@ class Account:
     currency: str = "USD"
     balance: Decimal = Decimal("0")
     version: int = 0
+
+    def __post_init__(self) -> None:
+        # Mirrors the DB-level `balance NUMERIC(20,4) CHECK (balance >= 0)`
+        # constraint. Unlike Money (used for mutation amounts, which must
+        # be strictly > 0), a starting/current balance of exactly 0 is
+        # valid — only negative is rejected. This matters now that
+        # CreateDummyAccountUseCase constructs a fresh Account with a
+        # caller-supplied balance; every other construction path
+        # (hydrating from a DB row) already satisfies this trivially.
+        if self.balance < 0:
+            raise InvalidAmount(self.balance)
 
     def apply_credit(
         self,

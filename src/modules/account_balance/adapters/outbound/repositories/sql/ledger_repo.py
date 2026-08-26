@@ -20,6 +20,7 @@ from src.modules.account_balance.adapters.outbound.repositories.sql.dbos.ledger_
 )
 from src.modules.account_balance.application.gateways.ledger_repository import (
     DuplicateIdempotencyKey,
+    LedgerRepository,
 )
 from src.modules.account_balance.domain.ledger_entry import EntryType, LedgerEntry
 from src.modules.account_balance.domain.money import Money
@@ -27,7 +28,7 @@ from src.modules.account_balance.domain.money import Money
 _UNIQUE_IDEMPOTENCY_CONSTRAINT = "uq_ledger_acct_idem"
 
 
-class SqlLedgerRepository:
+class SqlLedgerRepository(LedgerRepository):
     def __init__(self, session: AsyncSession, logger: logging.Logger) -> None:
         self._session = session
         self._logger = logger
@@ -72,7 +73,7 @@ class SqlLedgerRepository:
             raise
 
     async def find_by_idempotency_key(
-        self, account_id: UUID, idempotency_key: str
+            self, account_id: UUID, idempotency_key: str
     ) -> LedgerEntry | None:
         stmt = select(LedgerEntryRow).where(
             LedgerEntryRow.account_id == account_id,

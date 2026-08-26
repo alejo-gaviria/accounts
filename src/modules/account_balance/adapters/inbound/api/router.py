@@ -21,12 +21,16 @@ from src.modules.account_balance.adapters.inbound.api.dependencies import (
 )
 from src.modules.account_balance.adapters.inbound.api.schemas import (
     AccountResponse,
+    CreateAccountRequest,
     MutationRequest,
     MutationResponse,
     TransferRequest,
     TransferResponse,
 )
 from src.modules.account_balance.application.gateways.unit_of_work import UnitOfWork
+from src.modules.account_balance.application.use_cases.create_dummy_account import (
+    CreateDummyAccountUseCase,
+)
 from src.modules.account_balance.application.use_cases.credit import (
     CreditAccountUseCase,
 )
@@ -135,6 +139,36 @@ async def create_transfer(
         transfer_id=result.transfer_id,
         from_balance=result.debit_entry.balance_after,
         to_balance=result.credit_entry.balance_after if result.credit_entry else None,
+    )
+
+
+@router.post(
+    "/accounts",
+    response_model=AccountResponse,
+    status_code=201,
+    dependencies=[Depends(require_api_key)],
+)
+@inject
+async def create_dummy_account(
+    body: CreateAccountRequest,
+    use_case: CreateDummyAccountUseCase = Depends(
+        Provide[AccountBalanceContainer.create_dummy_account_use_case_provider]
+    ),
+) -> AccountResponse:
+    """Dev/test convenience only — NOT a real account-onboarding flow.
+
+    Inserts a fresh `accounts` row so credit/debit/transfer can be
+    smoke-tested without hand-seeding via `psql`. No Idempotency-Key
+    required (unlike the mutation endpoints) — a duplicate call just
+    creates another dummy account, which is the expected/harmless
+    behavior for a test-seeding helper, not a real business operation.
+    """
+    try:
+        account = await use_case.execute(body.currency, body.initial_balance)
+    except InvalidAmount as exc:
+        raise _to_http_error(exc) from exc
+    return AccountResponse(
+        id=account.id, balance=account.balance, currency=account.currency
     )
 
 

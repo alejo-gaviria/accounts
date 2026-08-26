@@ -44,6 +44,19 @@ class AccountResponse(BaseModel):
     currency: str
 
 
+class CreateAccountRequest(BaseModel):
+    """Dev/test convenience only — see CreateDummyAccountUseCase's
+    docstring. initial_balance is NOT constrained with Pydantic's
+    `ge=0` for the same reason MutationRequest.amount isn't constrained
+    with `gt=0`: validation is delegated to the domain (Account's
+    __post_init__) so a negative value goes through the same
+    error-to-HTTP mapping as every other domain error.
+    """
+
+    currency: str = "USD"
+    initial_balance: Decimal = Decimal("0")
+
+
 class ErrorDetail(BaseModel):
     code: str
     message: str

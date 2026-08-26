@@ -42,6 +42,40 @@ INSERT/SELECT/UPDATE on `accounts`; no DDL rights at all). The running
 application always connects as `accounts_app`, never as the
 owner/migration role used to run Alembic.
 
+### Smoke-testing credit/debit/transfer
+
+Credit/debit/transfer all operate on an existing account, so you need
+one to point them at. The easiest way is `POST /v1/accounts` — a
+**dev/test convenience endpoint, not a real account-onboarding flow**
+(no KYC, no customer linkage, it just inserts a row):
+
+```bash
+curl -X POST http://localhost:8000/v1/accounts \
+  -H "X-API-Key: 00000000-0000-0000-0000-000000000000" \
+  -H "Content-Type: application/json" \
+  -d '{"currency": "USD", "initial_balance": "100.00"}'
+# => 201 {"id": "<uuid>", "balance": "100.00", "currency": "USD"}
+
+curl -X POST http://localhost:8000/v1/accounts/<uuid>/credit \
+  -H "X-API-Key: 00000000-0000-0000-0000-000000000000" \
+  -H "Idempotency-Key: smoke-1" \
+  -H "Content-Type: application/json" \
+  -d '{"amount": "10.00"}'
+```
+
+**Fallback / alternative**: if you'd rather seed a row directly (e.g.
+to test with a specific known UUID, or against a DB where the app
+isn't running yet), connect with `psql` and insert manually:
+
+```bash
+psql postgresql://accounts:accounts@localhost:5442/accounts \
+  -c "INSERT INTO accounts (id, balance, currency) VALUES (gen_random_uuid(), 100.00, 'USD') RETURNING id;"
+```
+
+Both approaches land in the same `accounts` table — the API endpoint
+is just faster for routine local testing since it doesn't require a
+`psql` session.
+
 ## Tests
 
 ```bash
@@ -75,12 +109,15 @@ that image against a managed RDS Postgres 16 instance, with
   rate limiting. **Do not deploy this anywhere other than local
   development without replacing it** with real credential issuance
   (JWT or another proper service-to-service auth mechanism).
-- No live-Postgres verification has been run against this codebase in
-  the environment it was authored in (Docker daemon was unreachable
-  there). `docker compose config` validates and `alembic upgrade head --sql`
-  renders correctly, but nobody has actually run `make up && make migrate && make test`
-  end-to-end yet. Do that before trusting this in any shared
-  environment.
+- Live-Postgres verification: `make up && make migrate && make test`
+  has been run end-to-end successfully (migration applies cleanly,
+  `accounts_app` grants are exactly as designed, full test suite
+  including `@pytest.mark.integration`/`tests/e2e` passes against a
+  real `db`/`db-test`), and the app has been booted with `uvicorn` and
+  smoke-tested live via `curl` (including `POST /v1/accounts` ->
+  `POST .../credit`). Re-verify after any change to the schema,
+  migration, or connection settings before trusting a given commit in
+  a shared environment.
 - `.env.example` was not updated as part of this change (blocked by
   this environment's own file-permission policy on dotenv paths, not a
   design decision) — see the apply-progress notes for the intended

@@ -7,8 +7,9 @@ Everything is injected, nothing ambient — including the DB session and
 the logger. Repositories are deliberately NOT wired here as
 container-level providers: a singleton repo can't safely hold a
 per-request DB session/transaction. Instead only `session_factory_provider`
-(Singleton — reuses src/db.py's existing async_sessionmaker/engine
-setup) and `logger_provider` (Factory) are injected into
+(Singleton — reuses src/infrastructure/db.py's existing
+async_sessionmaker/engine setup) and `logger_provider` (Factory) are
+injected into
 `unit_of_work_provider` (Factory — a fresh SqlUnitOfWork, and therefore
 a fresh transaction, per resolution). SqlUnitOfWork.__aenter__
 constructs SqlAccountRepository/SqlLedgerRepository itself, passing
@@ -27,6 +28,9 @@ from src.infrastructure.db import async_session_factory
 from src.modules.account_balance.adapters.outbound.repositories.sql.uow import (
     SqlUnitOfWork,
 )
+from src.modules.account_balance.application.use_cases.create_dummy_account import (
+    CreateDummyAccountUseCase,
+)
 from src.modules.account_balance.application.use_cases.credit import (
     CreditAccountUseCase,
 )
@@ -41,9 +45,9 @@ class AccountBalanceContainer(containers.DeclarativeContainer):
     # module-level `logging.getLogger(__name__)` anywhere in this module.
     logger_provider = providers.Factory(logging.getLogger, "account_balance")
 
-    # Wraps the sessionmaker/engine already set up in src/db.py (which
-    # connects as the restricted accounts_app role) rather than building
-    # a second one here.
+    # Wraps the sessionmaker/engine already set up in
+    # src/infrastructure/db.py (which connects as the restricted
+    # accounts_app role) rather than building a second one here.
     session_factory_provider = providers.Object(async_session_factory)
 
     unit_of_work_provider = providers.Factory(
@@ -62,5 +66,11 @@ class AccountBalanceContainer(containers.DeclarativeContainer):
     )
     transfer_use_case_provider = providers.Factory(
         TransferUseCase,
+        uow=unit_of_work_provider,
+    )
+    # Dev/test convenience only - see CreateDummyAccountUseCase's
+    # docstring. Wired identically to the other use cases.
+    create_dummy_account_use_case_provider = providers.Factory(
+        CreateDummyAccountUseCase,
         uow=unit_of_work_provider,
     )

@@ -109,6 +109,7 @@ All mutations require header `Idempotency-Key: <string>` (400 if missing).
 - `POST /v1/accounts/{id}/debit` → same body → 200 or 409 InsufficientFunds.
 - `POST /v1/transfers` → body `{from_account_id, to_account_id, amount, currency}` → 200 `{transfer_id, from_balance, to_balance}`.
 - `GET /v1/accounts/{id}` → 200 `{id, balance, currency}`.
+- `POST /v1/accounts` → **dev/test convenience only, not a real onboarding flow** — body `{currency: str = "USD", initial_balance: Decimal >= 0 = 0}` → 201 `{id, balance, currency}`. Just inserts an `accounts` row (id server-generated) via a new `CreateDummyAccountUseCase` going through the same UoW/DI wiring as the other use cases. No KYC/customer linkage, no auth beyond the same `X-API-Key` v1 placeholder as every other route. Exists so `credit`/`debit`/`transfer` can be exercised without hand-seeding rows via `psql`.
 Errors: 400 InvalidAmount (`amount<=0`/ missing key), 404 UnknownAccount, 409 InsufficientFunds, 200 idempotent replay (identical body → identical prior result). Error body `{error: {code, message}}`.
 
 ## Entrypoint, Local Dev, Deployment

@@ -15,11 +15,12 @@ from sqlalchemy.sql import func
 from src.modules.account_balance.adapters.outbound.repositories.sql.dbos.account import (
     AccountRow,
 )
+from src.modules.account_balance.application.gateways.account_repository import AccountRepository
 from src.modules.account_balance.domain.account import Account
 from src.modules.account_balance.domain.errors import UnknownAccount
 
 
-class SqlAccountRepository:
+class SqlAccountRepository(AccountRepository):
     def __init__(self, session: AsyncSession, logger: logging.Logger) -> None:
         self._session = session
         self._logger = logger
@@ -59,4 +60,22 @@ class SqlAccountRepository:
         row.updated_at = func.now()
         self._logger.debug(
             "saved account id=%s new_balance=%s", account.id, account.balance
+        )
+
+    async def create(self, account: Account) -> None:
+        # Fresh row, nothing to lock - dev/test convenience only (see
+        # application/use_cases/create_dummy_account.py).
+        row = AccountRow(
+            id=account.id,
+            currency=account.currency,
+            balance=account.balance,
+            version=account.version,
+        )
+        self._session.add(row)
+        await self._session.flush()
+        self._logger.info(
+            "created dummy account id=%s balance=%s currency=%s",
+            account.id,
+            account.balance,
+            account.currency,
         )
