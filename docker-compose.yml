@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: accounts
+      POSTGRES_PASSWORD: accounts
+      POSTGRES_DB: accounts
+    ports:
+      - "5432:5432"
+    volumes:
+      - accounts_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U accounts -d accounts"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  db-test:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: accounts_test
+      POSTGRES_PASSWORD: accounts_test
+      POSTGRES_DB: accounts_test
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U accounts_test -d accounts_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  accounts_db_data:
