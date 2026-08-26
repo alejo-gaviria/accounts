@@ -1,11 +1,3 @@
-"""Async SQLAlchemy engine/session setup.
-
-The running application always connects as the restricted
-`accounts_app` role (settings.app_database_url) — never as the
-owner/migration role. Alembic is the only thing that uses
-settings.database_url directly (see migrations/env.py).
-"""
-
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,

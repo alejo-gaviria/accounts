@@ -74,7 +74,7 @@ nonexistent module.
 >    pero que sea un fastapi que se pueda correr local
 > 2. hay que hacerlo
 > 3. hagamoslo a aws
-> 4. 5. No uses stripe, se qedó ahi de un pyproject que tenía
+> 4. 5. No uses stripe, se quedó ahi de un pyproject que tenía
 >
 > Sigamos con la propuesta
 
@@ -172,7 +172,7 @@ house convention.
 
 **Prompt (pasted code showing a `get_current_session()` call inside a
 repository, then):**
-> Por qué no inyectas la sesion desde el contenedor,, eso y el logger,
+> Por qué no inyectas la sesion desde el contenedor, eso y el logger,
 > todo debe ser por inyección
 
 **Response:** Agreed this was a real anti-pattern — the prior pass had
@@ -191,7 +191,6 @@ anywhere.
 
 **Prompt:**
 > No me gustó los models de la db, deberían ser en la carpeta dbos, no
-> models
 
 **Response:** Moved the flat `models.py` into a `dbos/` package, split
 one file per entity (`account.py`, `ledger_entry.py`, `base.py`),
@@ -345,28 +344,3 @@ partially-completed work was safe (pure deletions, tests still 67/67),
 committed it as an explicit work-in-progress checkpoint rather than
 leaving it uncommitted or silently dropping it, and flagged exactly which
 files still need the same treatment.
-
----
-
-## 19. This document
-
-**Prompt:**
-> Necesito un resumen de prompts que te pedí para pegar en un archivo
-> prompts para que vean lo que hicimos, que incluya el SDD y demas.
->
-> Ademas un archivo adicional que diga por qué usamos esta arquitectura,
-> temas en base de datos de idempotencia y lock.
->
-> El request es:
-> - You can use AI; if you decide to use AI, it is advised that you tell
->   the AI what to do instead of asking it how you should think; also,
->   you must provide each and every prompt you used along with every
->   response
-> - As previously mentioned, provide a description on what was your
->   thinking process for making your choices on the architecture,
->   technology stack, strategies for tackling the important aspects of
->   this critical service, what are the trade-offs you considered in
->   your decisions and whatever you consider important to describe your
->   project
-
-**Response:** This file, plus `docs/DECISIONS.md`.

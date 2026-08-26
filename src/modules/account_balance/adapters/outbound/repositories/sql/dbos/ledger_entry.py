@@ -1,9 +1,4 @@
-"""DBO (Database Object) for the `ledger_entries` table — immutable,
-append-only.
-
-Kept 1:1 with the hand-written migrations rather than the other way
-around — this project doesn't autogenerate revisions from these DBOs.
-"""
+"""ledger_entries table DBO."""
 
 import uuid
 from datetime import datetime
@@ -45,10 +40,7 @@ class LedgerEntryRow(Base):
     currency: Mapped[str] = mapped_column(
         sa.CHAR(3), nullable=False, server_default="MXN"
     )
-    # Audit columns: what the caller actually requested, before
-    # conversion to the canonical MXN amount above. fx_rate defaults to
-    # 1 (no conversion); original_amount/original_currency have no
-    # DB-level default since they must always be supplied explicitly.
+    # audit: caller's original request before MXN conversion
     original_amount: Mapped[Decimal] = mapped_column(sa.Numeric(20, 4), nullable=False)
     original_currency: Mapped[str] = mapped_column(sa.CHAR(3), nullable=False)
     fx_rate: Mapped[Decimal] = mapped_column(
@@ -65,7 +57,6 @@ class LedgerEntryRow(Base):
 
     @classmethod
     def from_domain(cls, entry: LedgerEntry) -> "LedgerEntryRow":
-        """Populate this DBO from a domain LedgerEntry."""
         return cls(
             id=entry.id,
             account_id=entry.account_id,

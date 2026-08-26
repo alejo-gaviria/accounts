@@ -43,7 +43,6 @@ class AccountRow(Base):
 
     @classmethod
     def from_domain(cls, account: Account) -> "AccountRow":
-        """Populate this DBO from a domain Account aggregate."""
         return cls(
             id=account.id,
             currency=account.currency,

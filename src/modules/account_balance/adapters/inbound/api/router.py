@@ -1,12 +1,3 @@
-"""Inbound HTTP API — credit/debit/transfer/get, the source of truth
-for balance mutations.
-
-Use cases are resolved through AccountBalanceContainer via `@inject` +
-`Provide[...]` — routes never import/construct use-case classes
-directly. The container is wired to this module in
-src/infrastructure/main.py's `create_app()` at startup.
-"""
-
 from uuid import UUID
 
 from dependency_injector.wiring import Provide, inject
@@ -173,11 +164,7 @@ async def create_dummy_account(
         Provide[AccountBalanceContainer.create_dummy_account_use_case_provider]
     ),
 ) -> AccountResponse:
-    """Dev/test convenience only — NOT a real account-onboarding flow.
-
-    No Idempotency-Key required (unlike the mutation endpoints) — a
-    duplicate call just creates another dummy account.
-    """
+    # dev/test convenience only, no Idempotency-Key required
     try:
         account = await use_case.execute(body.initial_balance)
     except InvalidAmount as exc:
@@ -193,8 +180,6 @@ async def get_account(
     account_id: UUID,
     uow: UnitOfWork = Depends(Provide[AccountBalanceContainer.unit_of_work_provider]),
 ) -> AccountResponse:
-    # No non-locking read method exists on the port, so this reuses
-    # get_for_update() and just commits the read-only transaction.
     try:
         async with uow as uow:
             account = await uow.accounts.get_for_update(account_id)

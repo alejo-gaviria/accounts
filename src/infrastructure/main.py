@@ -1,9 +1,3 @@
-"""FastAPI application factory / entrypoint.
-
-Local: `uvicorn src.infrastructure.main:app --reload`
-Container: see Dockerfile.
-"""
-
 from fastapi import FastAPI
 
 from src.modules.account_balance.adapters.config.container import (

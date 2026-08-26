@@ -1,9 +1,3 @@
-"""FastAPI dependencies: auth guard and Idempotency-Key extraction.
-
-Use cases are resolved via AccountBalanceContainer (adapters/config/container.py),
-not through a plain FastAPI dependency function.
-"""
-
 from fastapi import Header, HTTPException
 
 from src.config import settings
