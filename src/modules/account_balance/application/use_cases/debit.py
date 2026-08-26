@@ -1,10 +1,3 @@
-"""Debit use case.
-
-Amount/currency are converted to MXN once, before the unit of work
-opens — the insufficient-funds check happens post-conversion, against
-the account's MXN balance.
-"""
-
 from decimal import Decimal
 from uuid import UUID
 
@@ -43,9 +36,6 @@ class DebitAccountUseCase:
             if existing is not None:
                 return existing
 
-            # May raise InsufficientFunds — propagates out of this
-            # `async with` block, so the UoW rolls back with no ledger
-            # row ever constructed or appended.
             entry = account.apply_debit(
                 money,
                 idempotency_key,

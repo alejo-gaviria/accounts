@@ -1,10 +1,4 @@
-"""create accounts and ledger_entries
-
-Revision ID: 3f8f816fa633
-Revises:
-Create Date: 2026-08-26 14:26:49.829978
-
-"""
+"""create accounts and ledger_entries"""
 from typing import Sequence, Union
 
 from alembic import op
@@ -21,7 +15,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Upgrade schema."""
     op.execute("CREATE EXTENSION IF NOT EXISTS \"pgcrypto\"")
 
     op.create_table(
@@ -97,10 +90,7 @@ def upgrade() -> None:
         ["account_id", "created_at"],
     )
 
-    # --- App-role grants (append-only enforcement at the DB layer) ---
-    # A dedicated, low-privilege role is used by the running application
-    # (see src/config.py: app_database_url); this migration runs as the
-    # owner/superuser role and is the only thing with DDL rights.
+    # append-only enforced via grants below
     op.execute(
         f"""
         DO $$
@@ -115,13 +105,11 @@ def upgrade() -> None:
         $$;
         """
     )
-    # CONNECT on the current database is granted to PUBLIC by default in
-    # vanilla Postgres, so no explicit GRANT CONNECT is needed here.
     op.execute(f"GRANT USAGE ON SCHEMA public TO {settings.app_db_role}")
     op.execute(
         f"GRANT SELECT, INSERT, UPDATE ON accounts TO {settings.app_db_role}"
     )
-    # Append-only: INSERT + SELECT only, explicitly no UPDATE/DELETE.
+    # no UPDATE/DELETE grant: append-only
     op.execute(
         f"GRANT SELECT, INSERT ON ledger_entries TO {settings.app_db_role}"
     )
@@ -131,7 +119,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Downgrade schema."""
     op.execute(f"REVOKE ALL ON ledger_entries FROM {settings.app_db_role}")
     op.execute(f"REVOKE ALL ON accounts FROM {settings.app_db_role}")
     op.drop_index("ix_ledger_account_created", table_name="ledger_entries")

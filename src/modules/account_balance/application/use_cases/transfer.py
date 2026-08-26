@@ -1,13 +1,3 @@
-"""Transfer use case.
-
-Both account locks are acquired in ascending-id order to avoid
-deadlocking against a concurrent transfer running in the opposite
-direction between the same two accounts. Both legs share one
-transfer_id; per-leg idempotency keys are derived from the single
-request Idempotency-Key. Amount/currency are converted to MXN once,
-before either leg is applied, since every account is MXN-denominated.
-"""
-
 from dataclasses import dataclass
 from decimal import Decimal
 from uuid import UUID, uuid4
@@ -50,7 +40,7 @@ class TransferUseCase:
         debit_key = f"{idempotency_key}#debit"
         credit_key = f"{idempotency_key}#credit"
 
-        first_id, second_id = sorted((from_account_id, to_account_id))
+        first_id, second_id = sorted((from_account_id, to_account_id))  # avoid deadlock
 
         async with self._uow as uow:
             locked = {
@@ -73,7 +63,6 @@ class TransferUseCase:
 
             transfer_id = uuid4()
 
-            # May raise InsufficientFunds — propagates, no rows written.
             debit_entry = from_account.apply_debit(
                 money,
                 debit_key,
@@ -105,9 +94,6 @@ class TransferUseCase:
                 uow.ledger, credit_entry
             )
             if credit_replay:
-                # Defensive only: the debit leg above already proved
-                # this is a new key pair, so this should not occur in
-                # practice.
                 return TransferResult(transfer_id, debit_result, credit_result)
 
             await uow.accounts.save(from_account)

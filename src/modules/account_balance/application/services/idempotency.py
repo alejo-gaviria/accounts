@@ -16,11 +16,6 @@ from src.modules.account_balance.domain.ledger_entry import LedgerEntry
 async def append_with_replay(
     ledgers: LedgerRepository, entry: LedgerEntry
 ) -> tuple[LedgerEntry, bool]:
-    """Returns (result_entry, is_replay).
-
-    is_replay=True means `entry` was NOT persisted — `result_entry` is
-    the pre-existing row from the original request that owns this key.
-    """
     try:
         await ledgers.append(entry)
     except DuplicateIdempotencyKey:

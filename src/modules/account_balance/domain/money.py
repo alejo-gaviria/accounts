@@ -1,12 +1,3 @@
-"""Money value object: a positive amount with a currency code.
-
-Always a positive mutation magnitude; direction (credit/debit) is
-carried separately by `EntryType` on `LedgerEntry`. Every Money the
-domain layer sees is already MXN — the application layer converts a
-request's original amount/currency to MXN via StaticExchangeRates
-before constructing a Money at all.
-"""
-
 from dataclasses import dataclass
 from decimal import Decimal
 

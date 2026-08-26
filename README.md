@@ -148,7 +148,3 @@ that image against a managed RDS Postgres 16 instance, with
   `POST .../credit`). Re-verify after any change to the schema,
   migration, or connection settings before trusting a given commit in
   a shared environment.
-- `.env.example` was not updated as part of this change (blocked by
-  this environment's own file-permission policy on dotenv paths, not a
-  design decision) — see the apply-progress notes for the intended
-  content (`DATABASE_URL`, `APP_DB_ROLE`, `APP_DB_PASSWORD`, `API_KEY`).

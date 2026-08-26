@@ -1,12 +1,3 @@
-"""SQL implementation of the UnitOfWork port.
-
-Owns the session/transaction AND constructs its own repositories fresh
-every time `async with uow:` is entered — no repo singletons, no
-ambient/global session lookup. `session` and `logger` are injected via
-the constructor (by AccountBalanceContainer); this class holds no
-container reference of its own.
-"""
-
 import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker

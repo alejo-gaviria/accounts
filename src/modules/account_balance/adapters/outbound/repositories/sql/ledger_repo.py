@@ -1,13 +1,3 @@
-"""SQL implementation of the LedgerRepository port.
-
-Insert/select only — deliberately no update/delete methods exist on
-this class at all, mirroring the DB-level append-only grant (the
-accounts_app role has no UPDATE/DELETE on ledger_entries; see the
-initial migration). Plain class taking session and logger via
-constructor injection; built fresh by SqlUnitOfWork.__aenter__ for
-every transaction, never a container-level singleton.
-"""
-
 import logging
 from uuid import UUID
 
@@ -37,18 +27,9 @@ class SqlLedgerRepository(LedgerRepository):
         row = LedgerEntryRow.from_domain(entry)
         self._session.add(row)
         try:
-            # flush (not commit) - stays inside the caller's transaction;
-            # this only needs to prove the unique constraint, not end
-            # the unit of work.
-            await self._session.flush()
+            await self._session.flush()  # flush, not commit
         except IntegrityError as exc:
-            # A failed flush leaves the session unusable until rolled
-            # back (SQLAlchemy requirement) - roll back just far enough
-            # to let the caller run find_by_idempotency_key() next in
-            # the same unit-of-work block. SqlUnitOfWork.__aexit__ still
-            # governs the whole transaction/session lifetime.
-            await self._session.rollback()
-
+            await self._session.rollback()  # required before reuse
             constraint_name = getattr(
                 getattr(exc, "orig", None), "constraint_name", None
             )

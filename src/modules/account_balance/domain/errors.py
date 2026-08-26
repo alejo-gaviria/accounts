@@ -1,10 +1,3 @@
-"""Domain-level errors for the account_balance module.
-
-These are pure Python exceptions with no framework/HTTP awareness; the
-inbound API adapter maps them to HTTP status codes (see
-adapters/inbound/api/router.py).
-"""
-
 from decimal import Decimal
 from uuid import UUID
 

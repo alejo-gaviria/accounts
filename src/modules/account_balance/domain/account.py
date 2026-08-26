@@ -24,8 +24,6 @@ class Account:
     version: int = 0
 
     def __post_init__(self) -> None:
-        # Unlike Money (mutation amounts, which must be strictly > 0), a
-        # balance of exactly 0 is valid — only negative is rejected.
         if self.balance < 0:
             raise InvalidAmount(self.balance)
 
@@ -38,9 +36,6 @@ class Account:
         original_currency: str = "MXN",
         fx_rate: Decimal = Decimal("1"),
     ) -> LedgerEntry:
-        # original_amount/original_currency/fx_rate are audit-only; this
-        # method doesn't perform currency conversion, it only records
-        # whatever the caller already computed.
         new_balance = self.balance + money.amount
         entry = LedgerEntry(
             account_id=self.id,

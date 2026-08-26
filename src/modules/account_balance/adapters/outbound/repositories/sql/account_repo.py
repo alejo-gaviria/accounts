@@ -24,9 +24,6 @@ class SqlAccountRepository(AccountRepository):
     def __init__(self, session: AsyncSession, logger: logging.Logger) -> None:
         self._session = session
         self._logger = logger
-        # Safe as a plain instance attribute: this repository is built
-        # fresh per transaction, not a shared singleton, so there's no
-        # cross-request leakage risk.
         self._locked_rows: dict[UUID, AccountRow] = {}
 
     async def get_for_update(self, account_id: UUID) -> Account:

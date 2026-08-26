@@ -1,16 +1,3 @@
-"""DI wiring for the account_balance module: `providers.Singleton` for
-stateful/shared things, `providers.Factory` for per-request instances.
-
-Repositories are deliberately NOT wired here as container-level
-providers: a singleton repo can't safely hold a per-request DB
-session/transaction. Instead `session_factory_provider` (Singleton)
-and `logger_provider` (Factory) are injected into `unit_of_work_provider`
-(Factory — a fresh SqlUnitOfWork, and therefore a fresh transaction,
-per resolution). SqlUnitOfWork.__aenter__ constructs
-SqlAccountRepository/SqlLedgerRepository itself, passing them the
-session + logger.
-"""
-
 import logging
 
 from dependency_injector import containers, providers
@@ -45,7 +32,6 @@ class AccountBalanceContainer(containers.DeclarativeContainer):
         logger=logger_provider,
     )
 
-    # Pure/stateless, safe as a Singleton unlike the repositories.
     exchange_rates_provider = providers.Singleton(StaticExchangeRates)
 
     credit_use_case_provider = providers.Factory(

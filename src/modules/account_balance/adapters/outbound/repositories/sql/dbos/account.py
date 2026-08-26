@@ -1,9 +1,4 @@
-"""DBO (Database Object) for the `accounts` table — the aggregate +
-balance projection row.
-
-Kept 1:1 with the hand-written migrations rather than the other way
-around — this project doesn't autogenerate revisions from these DBOs.
-"""
+"""accounts table DBO."""
 
 import uuid
 from datetime import datetime
