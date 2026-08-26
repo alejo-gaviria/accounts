@@ -13,10 +13,11 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # Owner/migration connection — DDL rights, used to run Alembic.
-    database_url: str = "postgresql+asyncpg://accounts:accounts@localhost:5432/accounts"
+    # Port 5442 (not 5432) avoids colliding with a locally installed Postgres.
+    database_url: str = "postgresql+asyncpg://accounts:accounts@localhost:5442/accounts"
 
     # Restricted runtime connection used by the FastAPI app (wired in
-    # src/db.py). Created by the initial migration with narrow grants:
+    # src/infrastructure/db.py). Created by the initial migration with narrow grants:
     # INSERT/SELECT-only on ledger_entries (no UPDATE/DELETE — enforces
     # append-only at the DB), INSERT/SELECT/UPDATE on accounts, no DDL.
     app_db_role: str = "accounts_app"

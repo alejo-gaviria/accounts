@@ -112,6 +112,7 @@ async def test_get_for_update_blocks_a_second_lock_on_the_same_account(
 
     session_a = session_factory()
     session_b = session_factory()
+    session_b_retry = None
     try:
         repo_a = SqlAccountRepository(session=session_a, logger=_test_logger)
         repo_b = SqlAccountRepository(session=session_b, logger=_test_logger)
@@ -125,11 +126,24 @@ async def test_get_for_update_blocks_a_second_lock_on_the_same_account(
 
         await session_a.rollback()  # releases the lock
 
-        # Now it should succeed promptly.
+        # `session_b`'s connection is unusable after the timeout above:
+        # asyncio.wait_for cancellation only abandons the Python-side
+        # await, it does NOT send a real cancel to the Postgres backend
+        # (that needs an explicit asyncpg Connection.cancel()), so the
+        # connection is left mid-query. Retrying on the same session
+        # hangs forever. This mirrors production: a request whose
+        # SqlUnitOfWork times out never reuses that connection either -
+        # the next request gets a brand new session from the factory.
+        session_b_retry = session_factory()
+        repo_b_retry = SqlAccountRepository(session=session_b_retry, logger=_test_logger)
+
+        # Now it should succeed promptly on the fresh connection.
         account = await asyncio.wait_for(
-            repo_b.get_for_update(account_id), timeout=2.0
+            repo_b_retry.get_for_update(account_id), timeout=2.0
         )
         assert account.id == account_id
     finally:
         await session_a.close()
         await session_b.close()
+        if session_b_retry is not None:
+            await session_b_retry.close()
