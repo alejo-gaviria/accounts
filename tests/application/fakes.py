@@ -4,6 +4,13 @@ Phase 4's focused test command is `pytest tests/domain tests/application`
 with no live infra ("N/A — pure logic, no live infra needed" per the
 tasks.md Suggested Work Units table) — these fakes are what make that
 possible. The real Postgres-backed adapters are Phase 5.
+
+Under the dependency-injector refactor, UnitOfWork is just the
+transaction boundary (no `.accounts`/`.ledgers`) — use cases take
+FakeAccountRepository/FakeLedgerRepository as separate constructor
+args, exactly as the real container wires
+account_repository_provider/ledger_repository_provider independently
+from unit_of_work_provider.
 """
 
 from uuid import UUID
@@ -62,11 +69,11 @@ class FakeLedgerRepository:
 
 
 class FakeUnitOfWork:
-    def __init__(
-        self, accounts: FakeAccountRepository, ledgers: FakeLedgerRepository
-    ) -> None:
-        self.accounts = accounts
-        self.ledgers = ledgers
+    """Pure transaction-boundary fake — no `.accounts`/`.ledgers`,
+    matching the real UnitOfWork port after the DI refactor.
+    """
+
+    def __init__(self) -> None:
         self.committed = False
         self.rolled_back = False
 

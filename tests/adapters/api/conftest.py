@@ -1,24 +1,22 @@
 """In-process API test fixtures.
 
-Uses the same in-memory fakes as tests/application (no live DB needed)
-via a FastAPI dependency override on get_unit_of_work, so router/auth/
-validation logic is exercised end-to-end (real ASGI request/response
-cycle via httpx) without requiring db-test.
+Uses the REAL wired app (src.main.app) and overrides the container's
+leaf providers (account_repository_provider, ledger_repository_provider,
+unit_of_work_provider) with fakes via `provider.override(...)` -
+dependency-injector's own supported testing pattern. Because the real
+credit/debit/transfer use-case providers reference those leaf providers
+BY REFERENCE (not by snapshotted value), overriding just the three leaf
+providers is enough - no need to also override each use-case provider
+individually. No live DB needed.
 """
 
 import pytest
 import pytest_asyncio
-from fastapi import FastAPI
+from dependency_injector import providers
 from httpx import ASGITransport, AsyncClient
 
 from src.config import settings
-from src.modules.account_balance.adapters.inbound.api.dependencies import (
-    get_unit_of_work,
-)
-from src.modules.account_balance.adapters.inbound.api.error_handlers import (
-    register_error_handlers,
-)
-from src.modules.account_balance.adapters.inbound.api.router import router
+from src.main import app as fastapi_app
 from tests.application.fakes import (
     FakeAccountRepository,
     FakeLedgerRepository,
@@ -38,15 +36,18 @@ def ledger_store():
 
 @pytest.fixture
 def app(accounts_store, ledger_store):
-    application = FastAPI()
-    application.include_router(router)
-    register_error_handlers(application)
+    container = fastapi_app.container
+    fake_accounts = FakeAccountRepository(accounts_store)
 
-    def _override_uow():
-        return FakeUnitOfWork(FakeAccountRepository(accounts_store), ledger_store)
+    container.account_repository_provider.override(providers.Object(fake_accounts))
+    container.ledger_repository_provider.override(providers.Object(ledger_store))
+    container.unit_of_work_provider.override(providers.Factory(FakeUnitOfWork))
 
-    application.dependency_overrides[get_unit_of_work] = _override_uow
-    return application
+    yield fastapi_app
+
+    container.account_repository_provider.reset_override()
+    container.ledger_repository_provider.reset_override()
+    container.unit_of_work_provider.reset_override()
 
 
 @pytest_asyncio.fixture

@@ -1,14 +1,15 @@
-"""FastAPI dependencies: auth guard, Idempotency-Key extraction, and the
-UnitOfWork factory.
+"""FastAPI dependencies: auth guard and Idempotency-Key extraction.
+
+The UnitOfWork/use-case factory used to live here too; it now lives in
+AccountBalanceContainer (adapters/config/container.py) per the
+dependency-injector refactor (design.md "Dependency Injection") —
+routes resolve those via `@inject` + `Provide[...]`, not through a
+plain FastAPI `Depends(get_unit_of_work)` function.
 """
 
 from fastapi import Header, HTTPException
 
 from src.config import settings
-from src.db import async_session_factory
-from src.modules.account_balance.adapters.outbound.repositories.sql.uow import (
-    SqlUnitOfWork,
-)
 
 
 async def require_api_key(
@@ -50,7 +51,3 @@ async def require_idempotency_key(
             },
         )
     return idempotency_key
-
-
-def get_unit_of_work() -> SqlUnitOfWork:
-    return SqlUnitOfWork(async_session_factory)

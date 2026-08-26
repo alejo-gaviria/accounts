@@ -9,7 +9,9 @@ from uuid import uuid4
 
 import pytest
 
-from src.modules.account_balance.application.use_cases.credit import credit
+from src.modules.account_balance.application.use_cases.credit import (
+    CreditAccountUseCase,
+)
 from src.modules.account_balance.domain.account import Account
 from src.modules.account_balance.domain.money import Money
 from tests.application.fakes import (
@@ -25,12 +27,13 @@ async def test_duplicate_idempotency_key_returns_original_result_no_reapply():
     accounts = FakeAccountRepository({account.id: account})
     ledgers = FakeLedgerRepository()
 
-    uow1 = FakeUnitOfWork(accounts, ledgers)
-    first = await credit(uow1, account.id, Money(Decimal("5.00")), "same-key")
+    use_case_1 = CreditAccountUseCase(FakeUnitOfWork(), accounts, ledgers)
+    first = await use_case_1.execute(account.id, Money(Decimal("5.00")), "same-key")
     assert account.balance == Decimal("15.00")
 
-    uow2 = FakeUnitOfWork(accounts, ledgers)
-    second = await credit(uow2, account.id, Money(Decimal("5.00")), "same-key")
+    uow2 = FakeUnitOfWork()
+    use_case_2 = CreditAccountUseCase(uow2, accounts, ledgers)
+    second = await use_case_2.execute(account.id, Money(Decimal("5.00")), "same-key")
 
     # Same result returned, balance NOT mutated a second time.
     assert second is first

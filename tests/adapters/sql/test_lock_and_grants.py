@@ -23,6 +23,10 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from src.modules.account_balance.adapters.outbound.repositories.sql.account_repo import (
     SqlAccountRepository,
 )
+from src.modules.account_balance.adapters.outbound.repositories.sql.session_context import (
+    reset_current_session,
+    set_current_session,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -93,6 +97,12 @@ async def test_ledger_entries_insert_and_select_allowed_for_app_role(
 async def test_get_for_update_blocks_a_second_lock_on_the_same_account(
     engine, session_factory
 ):
+    """SqlAccountRepository is a singleton with no per-session state of
+    its own (DI refactor) — it resolves the ambient session via
+    session_context. Two "concurrent" sessions are simulated here by
+    swapping which session is ambient before each call, exactly like
+    SqlUnitOfWork.__aenter__/__aexit__ do for real requests.
+    """
     account_id = uuid4()
     async with engine.begin() as conn:
         await conn.execute(
@@ -102,23 +112,33 @@ async def test_get_for_update_blocks_a_second_lock_on_the_same_account(
 
     session_a = session_factory()
     session_b = session_factory()
+    repo = SqlAccountRepository()
     try:
-        repo_a = SqlAccountRepository(session_a)
-        repo_b = SqlAccountRepository(session_b)
-
-        await repo_a.get_for_update(account_id)  # holds the lock
+        token_a = set_current_session(session_a)
+        await repo.get_for_update(account_id)  # holds the lock
+        reset_current_session(token_a)
 
         # A second lock attempt on the same row must block until the
         # first transaction ends - prove it by racing a short timeout.
-        with pytest.raises(asyncio.TimeoutError):
-            await asyncio.wait_for(repo_b.get_for_update(account_id), timeout=0.5)
+        token_b = set_current_session(session_b)
+        try:
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(
+                    repo.get_for_update(account_id), timeout=0.5
+                )
+        finally:
+            reset_current_session(token_b)
 
         await session_a.rollback()  # releases the lock
 
         # Now it should succeed promptly.
-        account = await asyncio.wait_for(
-            repo_b.get_for_update(account_id), timeout=2.0
-        )
+        token_b2 = set_current_session(session_b)
+        try:
+            account = await asyncio.wait_for(
+                repo.get_for_update(account_id), timeout=2.0
+            )
+        finally:
+            reset_current_session(token_b2)
         assert account.id == account_id
     finally:
         await session_a.close()
