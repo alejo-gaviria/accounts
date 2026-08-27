@@ -41,9 +41,7 @@ class FakeLedgerRepository:
                 existing.account_id == entry.account_id
                 and existing.idempotency_key == entry.idempotency_key
             ):
-                raise DuplicateIdempotencyKey(
-                    entry.account_id, entry.idempotency_key
-                )
+                raise DuplicateIdempotencyKey(entry.account_id, entry.idempotency_key)
         self.entries.append(entry)
 
     async def find_by_idempotency_key(

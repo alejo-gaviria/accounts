@@ -28,9 +28,7 @@ async def test_ledger_entries_update_is_rejected_for_app_role(
 ):
     async with engine.begin() as conn:
         await conn.execute(
-            text(
-                "INSERT INTO accounts (id, balance) VALUES (:id, 100) "
-            ),
+            text("INSERT INTO accounts (id, balance) VALUES (:id, 100) "),
             {"id": str(uuid4())},
         )
 
@@ -121,7 +119,9 @@ async def test_get_for_update_blocks_a_second_lock_on_the_same_account(
         # SqlUnitOfWork times out never reuses that connection either -
         # the next request gets a brand new session from the factory.
         session_b_retry = session_factory()
-        repo_b_retry = SqlAccountRepository(session=session_b_retry, logger=_test_logger)
+        repo_b_retry = SqlAccountRepository(
+            session=session_b_retry, logger=_test_logger
+        )
 
         # Now it should succeed promptly on the fresh connection.
         account = await asyncio.wait_for(

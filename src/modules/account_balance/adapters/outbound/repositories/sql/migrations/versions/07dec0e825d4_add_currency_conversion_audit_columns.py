@@ -1,13 +1,13 @@
 """add currency conversion audit columns"""
+
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
 
-
 # revision identifiers, used by Alembic.
-revision: str = '07dec0e825d4'
-down_revision: Union[str, Sequence[str], None] = '3f8f816fa633'
+revision: str = "07dec0e825d4"
+down_revision: Union[str, Sequence[str], None] = "3f8f816fa633"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -24,9 +24,7 @@ def upgrade() -> None:
     )
     op.add_column(
         "ledger_entries",
-        sa.Column(
-            "fx_rate", sa.Numeric(20, 8), nullable=False, server_default="1"
-        ),
+        sa.Column("fx_rate", sa.Numeric(20, 8), nullable=False, server_default="1"),
     )
 
     # backfill: pre-existing rows had no conversion

@@ -11,7 +11,7 @@ from src.modules.account_balance.adapters.inbound.api.dependencies import (
     require_api_key,
     require_idempotency_key,
 )
-from src.modules.account_balance.adapters.inbound.api.schemas import (
+from src.modules.account_balance.adapters.inbound.api.dtos.schemas import (
     AccountResponse,
     CreateAccountRequest,
     MutationRequest,
@@ -182,8 +182,12 @@ async def create_dummy_account(
 @inject
 async def get_account(
     account_id: UUID,
-    uow: UnitOfWork = Depends(Provide[AccountBalanceContainer.shared.unit_of_work_provider]),
-    logger: logging.Logger = Depends(Provide[AccountBalanceContainer.shared.logger_provider]),
+    uow: UnitOfWork = Depends(
+        Provide[AccountBalanceContainer.shared.unit_of_work_provider]
+    ),
+    logger: logging.Logger = Depends(
+        Provide[AccountBalanceContainer.shared.logger_provider]
+    ),
 ) -> AccountResponse:
     try:
         async with uow as uow:

@@ -13,6 +13,4 @@ class Money:
         if self.amount <= 0:
             raise InvalidAmount(self.amount)
         if len(self.currency) != 3:
-            raise ValueError(
-                f"currency must be a 3-letter code, got {self.currency!r}"
-            )
+            raise ValueError(f"currency must be a 3-letter code, got {self.currency!r}")

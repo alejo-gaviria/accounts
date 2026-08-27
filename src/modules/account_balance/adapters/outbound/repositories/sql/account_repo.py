@@ -15,7 +15,9 @@ from sqlalchemy.sql import func
 from src.modules.account_balance.adapters.outbound.repositories.sql.dbos.account import (
     AccountRow,
 )
-from src.modules.account_balance.application.gateways.account_repository import AccountRepository
+from src.modules.account_balance.application.gateways.account_repository import (
+    AccountRepository,
+)
 from src.modules.account_balance.domain.account import Account
 from src.modules.account_balance.domain.errors import UnknownAccount
 
@@ -34,9 +36,7 @@ class SqlAccountRepository(AccountRepository):
             raise UnknownAccount(account_id)
 
         self._locked_rows[account_id] = row
-        self._logger.debug(
-            "locked account id=%s balance=%s", account_id, row.balance
-        )
+        self._logger.debug("locked account id=%s balance=%s", account_id, row.balance)
         return Account(
             id=row.id,
             currency=row.currency,

@@ -29,9 +29,7 @@ async def test_create_account_with_initial_balance(client, valid_headers):
 
 
 @pytest.mark.asyncio
-async def test_create_account_ignores_a_currency_field_if_sent(
-    client, valid_headers
-):
+async def test_create_account_ignores_a_currency_field_if_sent(client, valid_headers):
     # Pydantic silently drops unknown fields; currency must stay MXN regardless
     resp = await client.post(
         "/v1/accounts",
@@ -65,9 +63,7 @@ async def test_create_account_without_api_key_returns_401(client):
 
 
 @pytest.mark.asyncio
-async def test_created_account_can_immediately_receive_a_credit(
-    client, valid_headers
-):
+async def test_created_account_can_immediately_receive_a_credit(client, valid_headers):
     create_resp = await client.post(
         "/v1/accounts",
         json={"initial_balance": "10.00"},

@@ -45,7 +45,7 @@ class SqlLedgerRepository(LedgerRepository):
             raise
 
     async def find_by_idempotency_key(
-            self, account_id: UUID, idempotency_key: str
+        self, account_id: UUID, idempotency_key: str
     ) -> LedgerEntry | None:
         stmt = select(LedgerEntryRow).where(
             LedgerEntryRow.account_id == account_id,

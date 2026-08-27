@@ -106,9 +106,7 @@ async def test_transfer_insufficient_funds_rolls_back_with_no_ledger_rows(
     )
 
     with pytest.raises(InsufficientFunds):
-        await use_case.execute(
-            high.id, low.id, Decimal("999.00"), "MXN", "req-2"
-        )
+        await use_case.execute(high.id, low.id, Decimal("999.00"), "MXN", "req-2")
 
     assert ledger.entries == []
     assert uow.committed is False

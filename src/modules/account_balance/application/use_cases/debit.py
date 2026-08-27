@@ -43,9 +43,7 @@ class DebitAccountUseCase:
 
             account = await accounts.get_for_update(account_id)
 
-            existing = await ledger.find_by_idempotency_key(
-                account_id, idempotency_key
-            )
+            existing = await ledger.find_by_idempotency_key(account_id, idempotency_key)
             if existing is not None:
                 return existing
 

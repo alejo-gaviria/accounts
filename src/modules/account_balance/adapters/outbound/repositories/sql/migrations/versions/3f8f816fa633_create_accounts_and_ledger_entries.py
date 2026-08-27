@@ -1,4 +1,5 @@
 """create accounts and ledger_entries"""
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -8,14 +9,14 @@ from sqlalchemy.dialects import postgresql
 from src.config import settings
 
 # revision identifiers, used by Alembic.
-revision: str = '3f8f816fa633'
+revision: str = "3f8f816fa633"
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.execute("CREATE EXTENSION IF NOT EXISTS \"pgcrypto\"")
+    op.execute('CREATE EXTENSION IF NOT EXISTS "pgcrypto"')
 
     op.create_table(
         "accounts",
@@ -32,9 +33,7 @@ def upgrade() -> None:
             nullable=False,
             server_default="0",
         ),
-        sa.Column(
-            "version", sa.BigInteger(), nullable=False, server_default="0"
-        ),
+        sa.Column("version", sa.BigInteger(), nullable=False, server_default="0"),
         sa.Column(
             "created_at",
             sa.TIMESTAMP(timezone=True),
@@ -91,8 +90,7 @@ def upgrade() -> None:
     )
 
     # append-only enforced via grants below
-    op.execute(
-        f"""
+    op.execute(f"""
         DO $$
         BEGIN
             IF NOT EXISTS (
@@ -103,19 +101,12 @@ def upgrade() -> None:
             END IF;
         END
         $$;
-        """
-    )
+        """)
     op.execute(f"GRANT USAGE ON SCHEMA public TO {settings.app_db_role}")
-    op.execute(
-        f"GRANT SELECT, INSERT, UPDATE ON accounts TO {settings.app_db_role}"
-    )
+    op.execute(f"GRANT SELECT, INSERT, UPDATE ON accounts TO {settings.app_db_role}")
     # no UPDATE/DELETE grant: append-only
-    op.execute(
-        f"GRANT SELECT, INSERT ON ledger_entries TO {settings.app_db_role}"
-    )
-    op.execute(
-        f"REVOKE UPDATE, DELETE ON ledger_entries FROM {settings.app_db_role}"
-    )
+    op.execute(f"GRANT SELECT, INSERT ON ledger_entries TO {settings.app_db_role}")
+    op.execute(f"REVOKE UPDATE, DELETE ON ledger_entries FROM {settings.app_db_role}")
 
 
 def downgrade() -> None:

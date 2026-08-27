@@ -84,9 +84,7 @@ class TransferUseCase:
                 original_currency=original_currency,
                 fx_rate=rate_used,
             )
-            debit_result, debit_replay = await append_with_replay(
-                ledger, debit_entry
-            )
+            debit_result, debit_replay = await append_with_replay(ledger, debit_entry)
             if debit_replay:
                 existing_credit = await ledger.find_by_idempotency_key(
                     to_account_id, credit_key

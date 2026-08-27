@@ -44,7 +44,9 @@ class Account:
             balance_after=new_balance,
             idempotency_key=idempotency_key,
             transfer_id=transfer_id,
-            original_amount=original_amount if original_amount is not None else money.amount,
+            original_amount=(
+                original_amount if original_amount is not None else money.amount
+            ),
             original_currency=original_currency,
             fx_rate=fx_rate,
         )
@@ -72,7 +74,9 @@ class Account:
             balance_after=new_balance,
             idempotency_key=idempotency_key,
             transfer_id=transfer_id,
-            original_amount=original_amount if original_amount is not None else money.amount,
+            original_amount=(
+                original_amount if original_amount is not None else money.amount
+            ),
             original_currency=original_currency,
             fx_rate=fx_rate,
         )

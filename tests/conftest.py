@@ -29,9 +29,7 @@ def test_database_url() -> str:
 async def _grant_append_only(engine: AsyncEngine) -> None:
     # mirrors migration DDL: keeps tests self-contained without requiring make migrate
     async with engine.begin() as conn:
-        await conn.execute(
-            text(
-                f"""
+        await conn.execute(text(f"""
                 DO $$
                 BEGIN
                     IF NOT EXISTS (
@@ -41,9 +39,7 @@ async def _grant_append_only(engine: AsyncEngine) -> None:
                     END IF;
                 END
                 $$;
-                """
-            )
-        )
+                """))
         await conn.execute(text(f"GRANT USAGE ON SCHEMA public TO {APP_ROLE}"))
         await conn.execute(
             text(f"GRANT SELECT, INSERT, UPDATE ON accounts TO {APP_ROLE}")
