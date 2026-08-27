@@ -3,16 +3,20 @@
 ## Technical Approach
 Hexagonal `account_balance` module. Domain owns `Account` + immutable `LedgerEntry`; balance is a cached projection updated in the same transaction that appends the ledger row. Mutations are API-owned, Postgres-backed, idempotent, and concurrency-safe via pessimistic row locks. v1 is locally runnable (docker-compose Postgres 16) and structurally AWS-ready (ECS/Fargate + RDS + Secrets Manager) without executing any provisioning.
 
-## Module Layout (under `accounts/src/modules/account_balance/`)
-- `domain/` → `account.py` (Account aggregate, invariants), `ledger_entry.py` (immutable entry, EntryType credit/debit), `money.py` (amount/currency VO), `errors.py` (InsufficientFunds, UnknownAccount, InvalidAmount).
-- `application/use_cases/` → `credit.py`, `debit.py`, `transfer.py` — each a **class** (`CreditAccountUseCase`, `DebitAccountUseCase`, `TransferUseCase`) with dependencies injected via constructor, never plain functions.
-- `application/gateways/` → `account_repository.py`, `ledger_repository.py`, `unit_of_work.py` (ports/Protocols).
-- `application/services/` → `idempotency.py` (replay orchestration), `exchange_rates.py` — `StaticExchangeRates`, a simple class with a fixed rate table (no external API), see "Currency Conversion" below.
-- `adapters/inbound/api/` → `router.py`, `schemas.py`, `dependencies.py`.
-- `adapters/outbound/repositories/sql/` → `dbos/` (SQLAlchemy declarative model classes, one per entity: `account.py`, `ledger_entry.py`, `base.py` — NOT a flat `models.py`; each DBO exposes a `@classmethod from_domain(cls, entity) -> Row` used by repos instead of manual field-by-field construction), `account_repo.py`, `ledger_repo.py`, `uow.py`, `migrations/`.
-- `adapters/config/` → `container.py` — `AccountBalanceContainer(containers.DeclarativeContainer)` wiring every use case class and its dependencies (session pool, repos, clock/id-generator if needed). Routes resolve use cases through the container, never construct them directly.
-- **Prune** (delete `.gitkeep` folders, not needed v1): `adapters/inbound/cron/`, `adapters/inbound/sqs/`, `adapters/outbound/repositories/dynamo/`, `adapters/outbound/repositories/redis/`.
-- New service root: `src/infrastructure/main.py` (FastAPI app factory), `src/config.py` (pydantic-settings), `src/infrastructure/db.py` (async engine/session).
+## Module Layout (under `accounts/src/modules/`)
+- **`shared/`** — cross-cutting infrastructure any module can depend on, not account-balance-specific:
+  - `adapters/config/container.py` → `SharedContainer(containers.DeclarativeContainer)`: `logger_provider = providers.Factory(logging.getLogger)`, `session_factory_provider = providers.Singleton(build_session_factory)` (wraps `create_async_engine` + `async_sessionmaker`, reading `src.config.settings`), `unit_of_work_provider = providers.Factory(SqlUnitOfWork, session_factory=session_factory_provider, logger=logger_provider)`.
+  - `adapters/outbound/sql/unit_of_work.py` → `SqlUnitOfWork` — now a **generic** transactional scope only: `__aenter__` creates a session from the injected `session_factory`, begins the transaction, exposes `self.session`, returns `self`; `__aexit__` commits on success / rolls back on exception, then closes. It does NOT know about `accounts`/`ledger` repositories anymore — that was account_balance-specific and doesn't belong in shared.
+  - `application/ports/unit_of_work.py` → the generic `UnitOfWork` Protocol (`async def __aenter__/__aexit__`, exposes `.session`), any module's use cases can type-hint against it.
+- `account_balance/domain/` → `account.py` (Account aggregate, invariants), `ledger_entry.py` (immutable entry, EntryType credit/debit), `money.py` (amount/currency VO), `errors.py` (InsufficientFunds, UnknownAccount, InvalidAmount).
+- `account_balance/application/use_cases/` → `credit.py`, `debit.py`, `transfer.py`, `create_dummy_account.py` — each a **class** (`CreditAccountUseCase`, etc.) with dependencies injected via constructor (`uow` from shared, `logger` from shared, `exchange_rates` local), never plain functions. Each constructs its own `SqlAccountRepository`/`SqlLedgerRepository` inline, right after entering the uow (`async with self._uow as uow: accounts = SqlAccountRepository(session=uow.session, logger=self._logger)`) — repo construction is account_balance-specific, so it stays here rather than inside the now-generic shared UoW.
+- `account_balance/application/gateways/` → `account_repository.py`, `ledger_repository.py` (ports/Protocols; the `unit_of_work.py` port moved to `shared/application/ports/`).
+- `account_balance/application/services/` → `idempotency.py` (replay orchestration), `exchange_rates.py` — `StaticExchangeRates`, a simple class with a fixed rate table (no external API), see "Currency Conversion" below.
+- `account_balance/adapters/inbound/api/` → `router.py`, `schemas.py`, `dependencies.py`.
+- `account_balance/adapters/outbound/repositories/sql/` → `dbos/` (SQLAlchemy declarative model classes, one per entity: `account.py`, `ledger_entry.py`, `base.py` — NOT a flat `models.py`; each DBO exposes a `@classmethod from_domain(cls, entity) -> Row` used by repos instead of manual field-by-field construction), `account_repo.py`, `ledger_repo.py`, `migrations/`. (`uow.py` moved to `shared/adapters/outbound/sql/`.)
+- `account_balance/adapters/config/` → `container.py` — `AccountBalanceContainer(containers.DeclarativeContainer)`: composes `shared = providers.Container(SharedContainer)` and pulls `shared.unit_of_work_provider` / `shared.logger_provider` into its use-case providers instead of redefining session/logger locally. Routes resolve use cases through the container, never construct them directly.
+- **Prune** (delete `.gitkeep` folders, not needed v1): `adapters/inbound/cron/`, `adapters/inbound/sqs/`, `adapters/outbound/repositories/dynamo/`, `adapters/outbound/repositories/redis/` (all under `account_balance/`).
+- New service root: `src/infrastructure/main.py` (FastAPI app factory), `src/config.py` (pydantic-settings), `src/infrastructure/db.py` (async engine/session — or this may now just delegate to `shared`'s `session_factory_provider`, see below).
 
 ## Domain Model + DB Schema
 `accounts` (aggregate + balance projection — **balance is always MXN**, see "Currency Conversion"):
@@ -62,12 +66,15 @@ COMMIT;
 Ordering note: acquiring `FOR UPDATE` before the INSERT serializes concurrent mutations on the same account, so the idempotency check-then-insert cannot race across connections — a duplicate key either belongs to a committed prior request (replay) or to the holder of the lock. Transfer runs both legs in ONE transaction, locking the two account rows in a deterministic order (by `id` ascending) to avoid deadlock; both legs share one `transfer_id` and derive per-leg idempotency keys from the request `Idempotency-Key`.
 
 ## Dependency Injection (project convention — `dependency-injector`)
-Use cases are classes, not functions, wired through a `dependency-injector` `containers.DeclarativeContainer` living at `adapters/config/container.py`, matching the existing house convention used across other Mattilda services (`SharedContainer`-style: `providers.Singleton` for stateful/shared things, `providers.Factory` for per-request objects, `<name>_provider` naming).
+Use cases are classes, not functions, wired through `dependency-injector` `containers.DeclarativeContainer`s, matching the existing house convention used across other Mattilda services (`SharedContainer`-style: `providers.Singleton` for stateful/shared things, `providers.Factory` for per-request objects, `<name>_provider` naming).
 
-**Everything is injected — no ambient/global access, ever.** This includes the DB session and the logger. Concretely: repositories are NOT container-level `providers.Singleton`s (a singleton repo can't hold a per-request DB session/transaction). Instead, the container injects a `session_factory` (Singleton — an `async_sessionmaker`/equivalent) into the `UnitOfWork`, which is a `providers.Factory` (a fresh instance per use-case call, since each mutation needs its own transaction). The UoW's `__aenter__` creates the session from the factory and constructs the repos itself, passing `session` and `logger` into their `__init__` — classic Unit-of-Work-owns-Repositories. No `contextvar`, no `get_current_session()`, no module-level `logging.getLogger(__name__)` anywhere in this module.
+**Everything is injected — no ambient/global access, ever.** This includes the DB session and the logger. Concretely: repositories are NOT container-level `providers.Singleton`s (a singleton repo can't hold a per-request DB session/transaction) — they're constructed fresh, per transaction, at the point of use.
+
+**Cross-module infra lives in `shared`, not duplicated per module.** `logger`, the DB `session_factory`, and the transactional `UnitOfWork` are generic — nothing about them is account-balance-specific — so they live in a `SharedContainer` (`src/modules/shared/adapters/config/container.py`) that `AccountBalanceContainer` composes as a dependency (`providers.Container(SharedContainer)`), rather than redefining them locally. Any future module in this monorepo composes the same `SharedContainer` instead of each reinventing its own logger/session/UoW wiring.
 
 ```python
-class AccountBalanceContainer(containers.DeclarativeContainer):
+# src/modules/shared/adapters/config/container.py
+class SharedContainer(containers.DeclarativeContainer):
     logger_provider = providers.Factory(logging.getLogger)
 
     session_factory_provider: providers.Singleton[async_sessionmaker] = providers.Singleton(
@@ -80,14 +87,12 @@ class AccountBalanceContainer(containers.DeclarativeContainer):
         logger=logger_provider,
     )
 
-    credit_use_case_provider = providers.Factory(
-        CreditAccountUseCase, uow=unit_of_work_provider,
-    )
-    debit_use_case_provider = providers.Factory(DebitAccountUseCase, uow=unit_of_work_provider)
-    transfer_use_case_provider = providers.Factory(TransferUseCase, uow=unit_of_work_provider)
 
-
+# src/modules/shared/adapters/outbound/sql/unit_of_work.py
 class SqlUnitOfWork:
+    """Generic transactional scope. Knows nothing about any module's
+    repositories — exposes only `.session`."""
+
     def __init__(self, session_factory: async_sessionmaker, logger: logging.Logger) -> None:
         self._session_factory = session_factory
         self._logger = logger
@@ -95,8 +100,6 @@ class SqlUnitOfWork:
     async def __aenter__(self) -> "SqlUnitOfWork":
         self.session = self._session_factory()
         await self.session.begin()
-        self.accounts = SqlAccountRepository(session=self.session, logger=self._logger)
-        self.ledger = SqlLedgerRepository(session=self.session, logger=self._logger)
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> None:
@@ -105,8 +108,32 @@ class SqlUnitOfWork:
         else:
             await self.session.rollback()
         await self.session.close()
+
+
+# src/modules/account_balance/adapters/config/container.py
+class AccountBalanceContainer(containers.DeclarativeContainer):
+    shared = providers.Container(SharedContainer)
+
+    exchange_rates_provider = providers.Singleton(StaticExchangeRates)
+
+    credit_use_case_provider = providers.Factory(
+        CreditAccountUseCase,
+        uow=shared.unit_of_work_provider,
+        logger=shared.logger_provider,
+        exchange_rates=exchange_rates_provider,
+    )
+    debit_use_case_provider = providers.Factory(DebitAccountUseCase, uow=shared.unit_of_work_provider, logger=shared.logger_provider, exchange_rates=exchange_rates_provider)
+    transfer_use_case_provider = providers.Factory(TransferUseCase, uow=shared.unit_of_work_provider, logger=shared.logger_provider, exchange_rates=exchange_rates_provider)
 ```
-Use cases receive only `uow` (Factory-provided) via constructor injection; inside `execute()` they do `async with self.uow as uow: await uow.accounts.get_for_update(...)`. Repos (`SqlAccountRepository`, `SqlLedgerRepository`) are plain classes taking `session` and `logger` as constructor params — built fresh by the UoW every transaction, never resolved from the container directly, never reaching for ambient state. FastAPI routes in `adapters/inbound/api/router.py` resolve use cases via `@inject` + `Provide[AccountBalanceContainer.credit_use_case_provider]` (wired in `src/main.py` app factory). Scope stays local to this module — no AWS/S3/SNS/SQS/Redis/JWT providers, since none of those are in v1 scope; only what account-balances actually needs (session factory, UoW, use cases).
+Use cases receive `uow` and `logger` (both Factory-provided, sourced from `shared`) via constructor injection; inside `execute()` they enter the uow and construct their own repos from `uow.session`:
+```python
+async with self._uow as uow:
+    accounts = SqlAccountRepository(session=uow.session, logger=self._logger)
+    ledger = SqlLedgerRepository(session=uow.session, logger=self._logger)
+    account = await accounts.get_for_update(account_id)
+    ...
+```
+Repos (`SqlAccountRepository`, `SqlLedgerRepository`) are plain classes taking `session` and `logger` as constructor params — built fresh at point of use every transaction, never resolved from the container directly, never reaching for ambient state. This is a minor, deliberate duplication (repo construction repeated across `credit`/`debit`/`transfer`/`create_dummy_account`) rather than hiding it back inside the now-generic UoW — three or four similar lines beat forcing account-balance-specific knowledge into shared, reusable infrastructure. FastAPI routes in `adapters/inbound/api/router.py` resolve use cases via `@inject` + `Provide[AccountBalanceContainer.credit_use_case_provider]` (wired in `src/infrastructure/main.py`'s app factory). No AWS/S3/SNS/SQS/Redis/JWT providers anywhere — none of those are in v1 scope.
 
 ## Currency Conversion (static table — no external API)
 Balances are canonically in MXN (see Domain Model above). Requests may arrive in USD, CAD, COP, or CNY (or MXN itself); a simple hardcoded class converts to MXN before the amount is applied — no external HTTP call, no caching, no network-failure handling needed, by explicit user request to keep this simple.

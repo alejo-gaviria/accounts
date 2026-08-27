@@ -1,28 +1,36 @@
-"""CreateDummyAccountUseCase tests: inserts a fresh row with the
-given/defaulted initial_balance (every account is MXN by construction,
-no currency param), and rejects a negative initial_balance via the
-same InvalidAmount domain error credit/debit use.
-"""
-
+import logging
 from decimal import Decimal
 
 import pytest
 
+import src.modules.account_balance.application.use_cases.create_dummy_account as create_dummy_account_module
 from src.modules.account_balance.application.use_cases.create_dummy_account import (
     CreateDummyAccountUseCase,
 )
 from src.modules.account_balance.domain.errors import InvalidAmount
 from tests.application.fakes import (
     FakeAccountRepository,
-    FakeLedgerRepository,
     FakeUnitOfWork,
 )
 
+_logger = logging.getLogger("test")
+
+
+def _patch_accounts(monkeypatch, accounts) -> None:
+    monkeypatch.setattr(
+        create_dummy_account_module,
+        "SqlAccountRepository",
+        lambda session, logger: accounts,
+    )
+
 
 @pytest.mark.asyncio
-async def test_creates_account_with_mxn_currency_and_zero_balance_by_default():
+async def test_creates_account_with_mxn_currency_and_zero_balance_by_default(
+    monkeypatch,
+):
     accounts = FakeAccountRepository({})
-    use_case = CreateDummyAccountUseCase(FakeUnitOfWork(accounts, FakeLedgerRepository()))
+    _patch_accounts(monkeypatch, accounts)
+    use_case = CreateDummyAccountUseCase(uow=FakeUnitOfWork(), logger=_logger)
 
     account = await use_case.execute()
 
@@ -33,9 +41,10 @@ async def test_creates_account_with_mxn_currency_and_zero_balance_by_default():
 
 
 @pytest.mark.asyncio
-async def test_creates_account_with_given_initial_balance():
+async def test_creates_account_with_given_initial_balance(monkeypatch):
     accounts = FakeAccountRepository({})
-    use_case = CreateDummyAccountUseCase(FakeUnitOfWork(accounts, FakeLedgerRepository()))
+    _patch_accounts(monkeypatch, accounts)
+    use_case = CreateDummyAccountUseCase(uow=FakeUnitOfWork(), logger=_logger)
 
     account = await use_case.execute(initial_balance=Decimal("50.00"))
 
@@ -44,9 +53,10 @@ async def test_creates_account_with_given_initial_balance():
 
 
 @pytest.mark.asyncio
-async def test_zero_initial_balance_is_allowed():
+async def test_zero_initial_balance_is_allowed(monkeypatch):
     accounts = FakeAccountRepository({})
-    use_case = CreateDummyAccountUseCase(FakeUnitOfWork(accounts, FakeLedgerRepository()))
+    _patch_accounts(monkeypatch, accounts)
+    use_case = CreateDummyAccountUseCase(uow=FakeUnitOfWork(), logger=_logger)
 
     account = await use_case.execute(initial_balance=Decimal("0"))
 
@@ -54,9 +64,10 @@ async def test_zero_initial_balance_is_allowed():
 
 
 @pytest.mark.asyncio
-async def test_negative_initial_balance_is_rejected():
+async def test_negative_initial_balance_is_rejected(monkeypatch):
     accounts = FakeAccountRepository({})
-    use_case = CreateDummyAccountUseCase(FakeUnitOfWork(accounts, FakeLedgerRepository()))
+    _patch_accounts(monkeypatch, accounts)
+    use_case = CreateDummyAccountUseCase(uow=FakeUnitOfWork(), logger=_logger)
 
     with pytest.raises(InvalidAmount):
         await use_case.execute(initial_balance=Decimal("-1.00"))
@@ -65,10 +76,11 @@ async def test_negative_initial_balance_is_rejected():
 
 
 @pytest.mark.asyncio
-async def test_commits_the_unit_of_work_on_success():
+async def test_commits_the_unit_of_work_on_success(monkeypatch):
     accounts = FakeAccountRepository({})
-    uow = FakeUnitOfWork(accounts, FakeLedgerRepository())
-    use_case = CreateDummyAccountUseCase(uow)
+    _patch_accounts(monkeypatch, accounts)
+    uow = FakeUnitOfWork()
+    use_case = CreateDummyAccountUseCase(uow=uow, logger=_logger)
 
     await use_case.execute()
 

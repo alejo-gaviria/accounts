@@ -1,13 +1,10 @@
-"""Debit use case tests: insufficient funds rejects with no state
-change (no ledger entry created, no balance change, transaction rolled
-back).
-"""
-
+import logging
 from decimal import Decimal
 from uuid import uuid4
 
 import pytest
 
+import src.modules.account_balance.application.use_cases.debit as debit_module
 from src.modules.account_balance.application.services.exchange_rates import (
     StaticExchangeRates,
 )
@@ -20,16 +17,22 @@ from tests.application.fakes import (
     FakeAccountRepository,
     FakeLedgerRepository,
     FakeUnitOfWork,
+    patch_use_case_repos,
 )
+
+_logger = logging.getLogger("test")
 
 
 @pytest.mark.asyncio
-async def test_debit_decreases_balance_when_sufficient_funds():
+async def test_debit_decreases_balance_when_sufficient_funds(monkeypatch):
     account = Account(id=uuid4(), balance=Decimal("10.00"))
     accounts = FakeAccountRepository({account.id: account})
     ledger = FakeLedgerRepository()
-    uow = FakeUnitOfWork(accounts, ledger)
-    use_case = DebitAccountUseCase(uow, StaticExchangeRates())
+    patch_use_case_repos(monkeypatch, debit_module, accounts, ledger)
+    uow = FakeUnitOfWork()
+    use_case = DebitAccountUseCase(
+        uow=uow, logger=_logger, exchange_rates=StaticExchangeRates()
+    )
 
     entry = await use_case.execute(account.id, Decimal("4.00"), "MXN", "key-1")
 
@@ -39,12 +42,15 @@ async def test_debit_decreases_balance_when_sufficient_funds():
 
 
 @pytest.mark.asyncio
-async def test_debit_raises_insufficient_funds_and_writes_no_ledger_row():
+async def test_debit_raises_insufficient_funds_and_writes_no_ledger_row(monkeypatch):
     account = Account(id=uuid4(), balance=Decimal("10.00"))
     accounts = FakeAccountRepository({account.id: account})
     ledger = FakeLedgerRepository()
-    uow = FakeUnitOfWork(accounts, ledger)
-    use_case = DebitAccountUseCase(uow, StaticExchangeRates())
+    patch_use_case_repos(monkeypatch, debit_module, accounts, ledger)
+    uow = FakeUnitOfWork()
+    use_case = DebitAccountUseCase(
+        uow=uow, logger=_logger, exchange_rates=StaticExchangeRates()
+    )
 
     with pytest.raises(InsufficientFunds):
         await use_case.execute(account.id, Decimal("10.01"), "MXN", "key-2")
@@ -57,14 +63,16 @@ async def test_debit_raises_insufficient_funds_and_writes_no_ledger_row():
 
 
 @pytest.mark.asyncio
-async def test_debit_in_a_foreign_currency_converts_before_checking_funds():
-    # 100 MXN balance; debit 10 USD == 169.60 MXN -> insufficient,
-    # even though "10" alone would have been fine.
+async def test_debit_in_a_foreign_currency_converts_before_checking_funds(
+    monkeypatch,
+):
+    # 100 MXN balance; debit 10 USD == 169.60 MXN -> insufficient.
     account = Account(id=uuid4(), balance=Decimal("100.00"))
     accounts = FakeAccountRepository({account.id: account})
     ledger = FakeLedgerRepository()
+    patch_use_case_repos(monkeypatch, debit_module, accounts, ledger)
     use_case = DebitAccountUseCase(
-        FakeUnitOfWork(accounts, ledger), StaticExchangeRates()
+        uow=FakeUnitOfWork(), logger=_logger, exchange_rates=StaticExchangeRates()
     )
 
     with pytest.raises(InsufficientFunds):
@@ -75,12 +83,15 @@ async def test_debit_in_a_foreign_currency_converts_before_checking_funds():
 
 
 @pytest.mark.asyncio
-async def test_debit_in_a_foreign_currency_records_original_amount_and_rate():
+async def test_debit_in_a_foreign_currency_records_original_amount_and_rate(
+    monkeypatch,
+):
     account = Account(id=uuid4(), balance=Decimal("200.00"))
     accounts = FakeAccountRepository({account.id: account})
     ledger = FakeLedgerRepository()
+    patch_use_case_repos(monkeypatch, debit_module, accounts, ledger)
     use_case = DebitAccountUseCase(
-        FakeUnitOfWork(accounts, ledger), StaticExchangeRates()
+        uow=FakeUnitOfWork(), logger=_logger, exchange_rates=StaticExchangeRates()
     )
 
     entry = await use_case.execute(account.id, Decimal("10.00"), "USD", "key-4")

@@ -1,15 +1,10 @@
-"""Transfer use case tests: source debits and destination credits
-atomically with two linked ledger entries; both account locks are
-acquired in ascending-id order so opposite-direction concurrent
-transfers can't deadlock; amount/currency are converted once and both
-legs apply the same converted MXN amount.
-"""
-
+import logging
 from decimal import Decimal
 from uuid import uuid4
 
 import pytest
 
+import src.modules.account_balance.application.use_cases.transfer as transfer_module
 from src.modules.account_balance.application.services.exchange_rates import (
     StaticExchangeRates,
 )
@@ -20,7 +15,10 @@ from tests.application.fakes import (
     FakeAccountRepository,
     FakeLedgerRepository,
     FakeUnitOfWork,
+    patch_use_case_repos,
 )
+
+_logger = logging.getLogger("test")
 
 
 def _two_accounts() -> tuple[Account, Account]:
@@ -31,12 +29,13 @@ def _two_accounts() -> tuple[Account, Account]:
 
 
 @pytest.mark.asyncio
-async def test_transfer_moves_funds_and_links_both_ledger_entries():
+async def test_transfer_moves_funds_and_links_both_ledger_entries(monkeypatch):
     low, high = _two_accounts()  # low.id < high.id
     accounts = FakeAccountRepository({low.id: low, high.id: high})
     ledger = FakeLedgerRepository()
+    patch_use_case_repos(monkeypatch, transfer_module, accounts, ledger)
     use_case = TransferUseCase(
-        FakeUnitOfWork(accounts, ledger), StaticExchangeRates()
+        uow=FakeUnitOfWork(), logger=_logger, exchange_rates=StaticExchangeRates()
     )
 
     result = await use_case.execute(low.id, high.id, Decimal("5.00"), "MXN", "req-1")
@@ -49,12 +48,15 @@ async def test_transfer_moves_funds_and_links_both_ledger_entries():
 
 
 @pytest.mark.asyncio
-async def test_transfer_commits_the_unit_of_work_on_success():
+async def test_transfer_commits_the_unit_of_work_on_success(monkeypatch):
     low, high = _two_accounts()
     accounts = FakeAccountRepository({low.id: low, high.id: high})
     ledger = FakeLedgerRepository()
-    uow = FakeUnitOfWork(accounts, ledger)
-    use_case = TransferUseCase(uow, StaticExchangeRates())
+    patch_use_case_repos(monkeypatch, transfer_module, accounts, ledger)
+    uow = FakeUnitOfWork()
+    use_case = TransferUseCase(
+        uow=uow, logger=_logger, exchange_rates=StaticExchangeRates()
+    )
 
     await use_case.execute(low.id, high.id, Decimal("5.00"), "MXN", "req-1")
 
@@ -62,20 +64,28 @@ async def test_transfer_commits_the_unit_of_work_on_success():
 
 
 @pytest.mark.asyncio
-async def test_transfer_locks_accounts_in_ascending_id_order_regardless_of_direction():
+async def test_transfer_locks_accounts_in_ascending_id_order_regardless_of_direction(
+    monkeypatch,
+):
     low, high = _two_accounts()
 
     accounts_a = FakeAccountRepository({low.id: low, high.id: high})
+    patch_use_case_repos(
+        monkeypatch, transfer_module, accounts_a, FakeLedgerRepository()
+    )
     use_case_a = TransferUseCase(
-        FakeUnitOfWork(accounts_a, FakeLedgerRepository()), StaticExchangeRates()
+        uow=FakeUnitOfWork(), logger=_logger, exchange_rates=StaticExchangeRates()
     )
     await use_case_a.execute(low.id, high.id, Decimal("1.00"), "MXN", "req-a")
     assert accounts_a.lock_order == [low.id, high.id]
 
     low2, high2 = _two_accounts()
     accounts_b = FakeAccountRepository({low2.id: low2, high2.id: high2})
+    patch_use_case_repos(
+        monkeypatch, transfer_module, accounts_b, FakeLedgerRepository()
+    )
     use_case_b = TransferUseCase(
-        FakeUnitOfWork(accounts_b, FakeLedgerRepository()), StaticExchangeRates()
+        uow=FakeUnitOfWork(), logger=_logger, exchange_rates=StaticExchangeRates()
     )
     # Opposite direction: destination has the lower id this time.
     await use_case_b.execute(high2.id, low2.id, Decimal("1.00"), "MXN", "req-b")
@@ -83,12 +93,17 @@ async def test_transfer_locks_accounts_in_ascending_id_order_regardless_of_direc
 
 
 @pytest.mark.asyncio
-async def test_transfer_insufficient_funds_rolls_back_with_no_ledger_rows():
+async def test_transfer_insufficient_funds_rolls_back_with_no_ledger_rows(
+    monkeypatch,
+):
     low, high = _two_accounts()
     accounts = FakeAccountRepository({low.id: low, high.id: high})
     ledger = FakeLedgerRepository()
-    uow = FakeUnitOfWork(accounts, ledger)
-    use_case = TransferUseCase(uow, StaticExchangeRates())
+    patch_use_case_repos(monkeypatch, transfer_module, accounts, ledger)
+    uow = FakeUnitOfWork()
+    use_case = TransferUseCase(
+        uow=uow, logger=_logger, exchange_rates=StaticExchangeRates()
+    )
 
     with pytest.raises(InsufficientFunds):
         await use_case.execute(
@@ -101,12 +116,15 @@ async def test_transfer_insufficient_funds_rolls_back_with_no_ledger_rows():
 
 
 @pytest.mark.asyncio
-async def test_transfer_in_a_foreign_currency_converts_once_for_both_legs():
+async def test_transfer_in_a_foreign_currency_converts_once_for_both_legs(
+    monkeypatch,
+):
     low, high = _two_accounts()  # low balance=20, high balance=5
     accounts = FakeAccountRepository({low.id: low, high.id: high})
     ledger = FakeLedgerRepository()
+    patch_use_case_repos(monkeypatch, transfer_module, accounts, ledger)
     use_case = TransferUseCase(
-        FakeUnitOfWork(accounts, ledger), StaticExchangeRates()
+        uow=FakeUnitOfWork(), logger=_logger, exchange_rates=StaticExchangeRates()
     )
 
     # 1 USD -> 16.96 MXN.

@@ -1,16 +1,13 @@
-"""In-process API test fixtures.
-
-Uses the real wired app and overrides the container's
-`unit_of_work_provider` with a Factory that builds a fresh
-FakeUnitOfWork per request, sharing the same fake accounts/ledger
-stores across requests within one test. No live DB needed.
-"""
-
 import pytest
 import pytest_asyncio
 from dependency_injector import providers
 from httpx import ASGITransport, AsyncClient
 
+import src.modules.account_balance.adapters.inbound.api.router as router_module
+import src.modules.account_balance.application.use_cases.create_dummy_account as create_dummy_account_module
+import src.modules.account_balance.application.use_cases.credit as credit_module
+import src.modules.account_balance.application.use_cases.debit as debit_module
+import src.modules.account_balance.application.use_cases.transfer as transfer_module
 from src.config import settings
 from src.infrastructure.main import app as fastapi_app
 from tests.application.fakes import (
@@ -18,6 +15,8 @@ from tests.application.fakes import (
     FakeLedgerRepository,
     FakeUnitOfWork,
 )
+
+_MUTATION_USE_CASE_MODULES = [credit_module, debit_module, transfer_module]
 
 
 @pytest.fixture
@@ -31,17 +30,31 @@ def ledger_store():
 
 
 @pytest.fixture
-def app(accounts_store, ledger_store):
+def app(monkeypatch, accounts_store, ledger_store):
     container = fastapi_app.container
     fake_accounts = FakeAccountRepository(accounts_store)
 
-    container.unit_of_work_provider.override(
-        providers.Factory(FakeUnitOfWork, accounts=fake_accounts, ledger=ledger_store)
+    for module in _MUTATION_USE_CASE_MODULES:
+        monkeypatch.setattr(
+            module, "SqlAccountRepository", lambda session, logger: fake_accounts
+        )
+        monkeypatch.setattr(
+            module, "SqlLedgerRepository", lambda session, logger: ledger_store
+        )
+    monkeypatch.setattr(
+        create_dummy_account_module,
+        "SqlAccountRepository",
+        lambda session, logger: fake_accounts,
     )
+    monkeypatch.setattr(
+        router_module, "SqlAccountRepository", lambda session, logger: fake_accounts
+    )
+
+    container.shared.unit_of_work_provider.override(providers.Factory(FakeUnitOfWork))
 
     yield fastapi_app
 
-    container.unit_of_work_provider.reset_override()
+    container.shared.unit_of_work_provider.reset_override()
 
 
 @pytest_asyncio.fixture

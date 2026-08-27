@@ -1,7 +1,13 @@
 from decimal import Decimal
+from logging import Logger
 from uuid import UUID
 
-from src.modules.account_balance.application.gateways.unit_of_work import UnitOfWork
+from src.modules.account_balance.adapters.outbound.repositories.sql.account_repo import (
+    SqlAccountRepository,
+)
+from src.modules.account_balance.adapters.outbound.repositories.sql.ledger_repo import (
+    SqlLedgerRepository,
+)
 from src.modules.account_balance.application.services.exchange_rates import (
     StaticExchangeRates,
 )
@@ -10,11 +16,15 @@ from src.modules.account_balance.application.services.idempotency import (
 )
 from src.modules.account_balance.domain.ledger_entry import LedgerEntry
 from src.modules.account_balance.domain.money import Money
+from src.modules.shared.application.ports.unit_of_work import UnitOfWork
 
 
 class DebitAccountUseCase:
-    def __init__(self, uow: UnitOfWork, exchange_rates: StaticExchangeRates) -> None:
+    def __init__(
+        self, uow: UnitOfWork, logger: Logger, exchange_rates: StaticExchangeRates
+    ) -> None:
         self._uow = uow
+        self._logger = logger
         self._exchange_rates = exchange_rates
 
     async def execute(
@@ -28,9 +38,12 @@ class DebitAccountUseCase:
         money = Money(converted_amount, "MXN")
 
         async with self._uow as uow:
-            account = await uow.accounts.get_for_update(account_id)
+            accounts = SqlAccountRepository(session=uow.session, logger=self._logger)
+            ledger = SqlLedgerRepository(session=uow.session, logger=self._logger)
 
-            existing = await uow.ledger.find_by_idempotency_key(
+            account = await accounts.get_for_update(account_id)
+
+            existing = await ledger.find_by_idempotency_key(
                 account_id, idempotency_key
             )
             if existing is not None:
@@ -44,9 +57,9 @@ class DebitAccountUseCase:
                 fx_rate=rate_used,
             )
 
-            result, is_replay = await append_with_replay(uow.ledger, entry)
+            result, is_replay = await append_with_replay(ledger, entry)
             if is_replay:
                 return result
 
-            await uow.accounts.save(account)
+            await accounts.save(account)
             return result

@@ -1,11 +1,3 @@
-"""In-memory test doubles for the application-layer ports.
-
-FakeUnitOfWork mirrors the real SqlUnitOfWork's shape: `.accounts`/
-`.ledger` are set directly (fakes need no session/logger to build), and
-`__aexit__`'s commit/rollback outcome is exception-driven, same as the
-real one.
-"""
-
 from uuid import UUID
 
 from src.modules.account_balance.application.gateways.ledger_repository import (
@@ -67,11 +59,12 @@ class FakeLedgerRepository:
 
 
 class FakeUnitOfWork:
-    def __init__(
-        self, accounts: FakeAccountRepository, ledger: FakeLedgerRepository
-    ) -> None:
-        self.accounts = accounts
-        self.ledger = ledger
+    """Generic, mirrors the real (now shared) SqlUnitOfWork's shape:
+    only `.session` + commit/rollback, no repo attributes.
+    """
+
+    def __init__(self) -> None:
+        self.session = object()  # opaque placeholder, unused by fakes
         self.committed = False
         self.rolled_back = False
 
@@ -83,4 +76,17 @@ class FakeUnitOfWork:
             self.committed = True
         else:
             self.rolled_back = True
-        return False  # never suppress exceptions
+        return False
+
+
+def patch_use_case_repos(monkeypatch, use_case_module, accounts, ledger) -> None:
+    """Use cases construct SqlAccountRepository/SqlLedgerRepository by
+    name inline (design.md); patch those names in the use-case module's
+    namespace so unit tests exercise fakes instead of the real DB.
+    """
+    monkeypatch.setattr(
+        use_case_module, "SqlAccountRepository", lambda session, logger: accounts
+    )
+    monkeypatch.setattr(
+        use_case_module, "SqlLedgerRepository", lambda session, logger: ledger
+    )

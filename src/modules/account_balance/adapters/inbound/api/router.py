@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 
 from dependency_injector.wiring import Provide, inject
@@ -18,7 +19,9 @@ from src.modules.account_balance.adapters.inbound.api.schemas import (
     TransferRequest,
     TransferResponse,
 )
-from src.modules.account_balance.application.gateways.unit_of_work import UnitOfWork
+from src.modules.account_balance.adapters.outbound.repositories.sql.account_repo import (
+    SqlAccountRepository,
+)
 from src.modules.account_balance.application.use_cases.create_dummy_account import (
     CreateDummyAccountUseCase,
 )
@@ -35,6 +38,7 @@ from src.modules.account_balance.domain.errors import (
     UnknownAccount,
     UnsupportedCurrency,
 )
+from src.modules.shared.application.ports.unit_of_work import UnitOfWork
 
 router = APIRouter(prefix="/v1")
 
@@ -178,11 +182,13 @@ async def create_dummy_account(
 @inject
 async def get_account(
     account_id: UUID,
-    uow: UnitOfWork = Depends(Provide[AccountBalanceContainer.unit_of_work_provider]),
+    uow: UnitOfWork = Depends(Provide[AccountBalanceContainer.shared.unit_of_work_provider]),
+    logger: logging.Logger = Depends(Provide[AccountBalanceContainer.shared.logger_provider]),
 ) -> AccountResponse:
     try:
         async with uow as uow:
-            account = await uow.accounts.get_for_update(account_id)
+            accounts = SqlAccountRepository(session=uow.session, logger=logger)
+            account = await accounts.get_for_update(account_id)
     except UnknownAccount as exc:
         raise _to_http_error(exc) from exc
     return AccountResponse(

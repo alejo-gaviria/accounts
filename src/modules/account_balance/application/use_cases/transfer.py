@@ -1,8 +1,14 @@
 from dataclasses import dataclass
 from decimal import Decimal
+from logging import Logger
 from uuid import UUID, uuid4
 
-from src.modules.account_balance.application.gateways.unit_of_work import UnitOfWork
+from src.modules.account_balance.adapters.outbound.repositories.sql.account_repo import (
+    SqlAccountRepository,
+)
+from src.modules.account_balance.adapters.outbound.repositories.sql.ledger_repo import (
+    SqlLedgerRepository,
+)
 from src.modules.account_balance.application.services.exchange_rates import (
     StaticExchangeRates,
 )
@@ -11,6 +17,7 @@ from src.modules.account_balance.application.services.idempotency import (
 )
 from src.modules.account_balance.domain.ledger_entry import LedgerEntry
 from src.modules.account_balance.domain.money import Money
+from src.modules.shared.application.ports.unit_of_work import UnitOfWork
 
 
 @dataclass(frozen=True)
@@ -21,8 +28,11 @@ class TransferResult:
 
 
 class TransferUseCase:
-    def __init__(self, uow: UnitOfWork, exchange_rates: StaticExchangeRates) -> None:
+    def __init__(
+        self, uow: UnitOfWork, logger: Logger, exchange_rates: StaticExchangeRates
+    ) -> None:
         self._uow = uow
+        self._logger = logger
         self._exchange_rates = exchange_rates
 
     async def execute(
@@ -43,18 +53,21 @@ class TransferUseCase:
         first_id, second_id = sorted((from_account_id, to_account_id))  # avoid deadlock
 
         async with self._uow as uow:
+            accounts = SqlAccountRepository(session=uow.session, logger=self._logger)
+            ledger = SqlLedgerRepository(session=uow.session, logger=self._logger)
+
             locked = {
-                first_id: await uow.accounts.get_for_update(first_id),
-                second_id: await uow.accounts.get_for_update(second_id),
+                first_id: await accounts.get_for_update(first_id),
+                second_id: await accounts.get_for_update(second_id),
             }
             from_account = locked[from_account_id]
             to_account = locked[to_account_id]
 
-            existing_debit = await uow.ledger.find_by_idempotency_key(
+            existing_debit = await ledger.find_by_idempotency_key(
                 from_account_id, debit_key
             )
             if existing_debit is not None:
-                existing_credit = await uow.ledger.find_by_idempotency_key(
+                existing_credit = await ledger.find_by_idempotency_key(
                     to_account_id, credit_key
                 )
                 return TransferResult(
@@ -72,10 +85,10 @@ class TransferUseCase:
                 fx_rate=rate_used,
             )
             debit_result, debit_replay = await append_with_replay(
-                uow.ledger, debit_entry
+                ledger, debit_entry
             )
             if debit_replay:
-                existing_credit = await uow.ledger.find_by_idempotency_key(
+                existing_credit = await ledger.find_by_idempotency_key(
                     to_account_id, credit_key
                 )
                 return TransferResult(
@@ -91,11 +104,11 @@ class TransferUseCase:
                 fx_rate=rate_used,
             )
             credit_result, credit_replay = await append_with_replay(
-                uow.ledger, credit_entry
+                ledger, credit_entry
             )
             if credit_replay:
                 return TransferResult(transfer_id, debit_result, credit_result)
 
-            await uow.accounts.save(from_account)
-            await uow.accounts.save(to_account)
+            await accounts.save(from_account)
+            await accounts.save(to_account)
             return TransferResult(transfer_id, debit_result, credit_result)
