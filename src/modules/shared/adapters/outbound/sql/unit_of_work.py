@@ -2,8 +2,10 @@ import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from src.modules.shared.application.ports.unit_of_work import UnitOfWork
 
-class SqlUnitOfWork:
+
+class SqlUnitOfWork(UnitOfWork):
     def __init__(
         self,
         session_factory: async_sessionmaker[AsyncSession],
