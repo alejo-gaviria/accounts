@@ -6,12 +6,7 @@ from src.config import settings
 async def require_api_key(
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ) -> None:
-    """v1/local-only placeholder auth guard: a single shared static key
-    compared in plain Python — no hashing, no rotation, no per-client
-    scoping, no rate limiting. NOT PRODUCTION-GRADE — replace with real
-    credential issuance before deploying anywhere that isn't purely
-    local development.
-    """
+    # static v1 key, not production-grade
     if x_api_key is None or x_api_key != settings.api_key:
         raise HTTPException(
             status_code=401,

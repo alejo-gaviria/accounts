@@ -1,7 +1,3 @@
-"""Smoke test proving the pytest + pytest-asyncio toolchain is wired
-up. Intentionally infra-free.
-"""
-
 import pytest
 
 

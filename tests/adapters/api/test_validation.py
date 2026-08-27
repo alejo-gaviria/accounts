@@ -1,8 +1,3 @@
-"""Mutation validation + error-to-HTTP mapping tests: 400 InvalidAmount,
-404 UnknownAccount, 409 InsufficientFunds, error body shape
-{error: {code, message}}.
-"""
-
 from decimal import Decimal
 from uuid import uuid4
 

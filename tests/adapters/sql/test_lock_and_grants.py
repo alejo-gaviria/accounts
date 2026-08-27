@@ -1,8 +1,6 @@
-"""Integration tests against a real Postgres (db-test compose service):
-the app's DB role must not be able to UPDATE/DELETE ledger_entries, and
-concurrent mutations on the same account must serialize via
-`SELECT ... FOR UPDATE`. Self-skips (not fails) wherever `db-test`
-isn't reachable.
+"""Integration tests: DB role cannot UPDATE/DELETE ledger_entries; concurrent
+mutations on the same account serialize via SELECT FOR UPDATE. Self-skips
+(not fails) when db-test is unreachable.
 """
 
 import asyncio
@@ -92,11 +90,6 @@ async def test_ledger_entries_insert_and_select_allowed_for_app_role(
 async def test_get_for_update_blocks_a_second_lock_on_the_same_account(
     engine, session_factory
 ):
-    """Two "concurrent" transactions are simulated with two separate
-    sessions, each with its own repository instance, exactly like two
-    different SqlUnitOfWork.__aenter__ calls for two different requests
-    would produce.
-    """
     account_id = uuid4()
     async with engine.begin() as conn:
         await conn.execute(
@@ -113,8 +106,7 @@ async def test_get_for_update_blocks_a_second_lock_on_the_same_account(
 
         await repo_a.get_for_update(account_id)  # holds the lock
 
-        # A second lock attempt on the same row must block until the
-        # first transaction ends - prove it by racing a short timeout.
+        # must block until the first transaction ends — prove via short timeout
         with pytest.raises(asyncio.TimeoutError):
             await asyncio.wait_for(repo_b.get_for_update(account_id), timeout=0.5)
 

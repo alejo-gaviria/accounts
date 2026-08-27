@@ -1,7 +1,3 @@
-"""StaticExchangeRates tests: all 5 supported currencies resolve to
-their hardcoded rate; anything else raises UnsupportedCurrency.
-"""
-
 from decimal import Decimal
 
 import pytest

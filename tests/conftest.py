@@ -1,20 +1,3 @@
-"""Shared pytest fixtures.
-
-Test-database strategy
------------------------
-Integration-level tests (domain/application tests remain pure and need no
-database) run against the ``db-test`` service defined in
-``docker-compose.yml`` (Postgres 16, isolated from the ``db`` dev service,
-tmpfs-backed so each run starts empty). Start it with::
-
-    docker compose up -d db-test
-
-The connection string is read from ``TEST_DATABASE_URL``, defaulting to the
-docker-compose ``db-test`` service's exposed port. Adapter/integration tests
-should be marked with ``@pytest.mark.integration`` and are expected to be
-skipped in environments without the compose stack running.
-"""
-
 import os
 from collections.abc import AsyncIterator
 
@@ -44,11 +27,7 @@ def test_database_url() -> str:
 
 
 async def _grant_append_only(engine: AsyncEngine) -> None:
-    """Mirrors the initial migration's role/grant DDL (see
-    migrations/versions/3f8f816fa633_*.py) so integration/e2e suites are
-    self-contained and don't require `make migrate` to have run against
-    db-test first.
-    """
+    # mirrors migration DDL: keeps tests self-contained without requiring make migrate
     async with engine.begin() as conn:
         await conn.execute(
             text(
@@ -79,12 +58,7 @@ async def _grant_append_only(engine: AsyncEngine) -> None:
 
 @pytest_asyncio.fixture
 async def engine() -> AsyncIterator[AsyncEngine]:
-    """Session-independent Postgres engine against TEST_DATABASE_URL,
-    schema + accounts_app grants created fresh, skips (not fails) if
-    db-test isn't reachable. Shared by tests/adapters/sql and tests/e2e.
-    """
-    # Import the entity DBO modules (not just base) so their tables
-    # register onto Base.metadata before create_all runs below.
+    # imports must precede create_all: side-effect registers DBO tables on Base.metadata
     from src.modules.account_balance.adapters.outbound.repositories.sql.dbos import (
         account,  # noqa: F401
         ledger_entry,  # noqa: F401

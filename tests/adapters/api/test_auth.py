@@ -1,8 +1,3 @@
-"""X-API-Key placeholder auth guard on mutation routes: requests
-without/with-wrong X-API-Key get 401. GET (read-only) is intentionally
-not guarded.
-"""
-
 from uuid import uuid4
 
 import pytest

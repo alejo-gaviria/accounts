@@ -1,9 +1,3 @@
-"""E2E smoke test: boots the real app, wired through the real
-SqlUnitOfWork/SQL repos against Postgres — no fakes anywhere — and
-exercises credit, debit, transfer, and get. Self-skips via the shared
-`engine` fixture when db-test isn't reachable.
-"""
-
 from decimal import Decimal
 from uuid import uuid4
 
@@ -70,8 +64,7 @@ async def test_full_stack_credit_debit_transfer_and_get(app, engine):
         assert resp.status_code == 200
         assert Decimal(resp.json()["balance"]) == Decimal("100.00")
 
-        # Duplicate Idempotency-Key on the credit leg replays instead of
-        # re-applying.
+        # duplicate Idempotency-Key replays the original result instead of re-applying
         resp = await client.post(
             f"/v1/accounts/{from_account_id}/credit",
             json={"amount": "25.00"},

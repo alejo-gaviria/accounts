@@ -1,8 +1,3 @@
-"""LedgerEntry immutability and Money validation tests. Ledger rows are
-append-only; the in-process mirror of that invariant is that
-LedgerEntry cannot be mutated after construction.
-"""
-
 import dataclasses
 from decimal import Decimal
 from uuid import uuid4

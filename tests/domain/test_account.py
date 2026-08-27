@@ -1,9 +1,3 @@
-"""Account aggregate tests: a debit/transfer leg that would take
-balance below zero is rejected with no state change (InsufficientFunds);
-a valid credit/debit appends a ledger entry whose balance_after matches
-the new aggregate balance.
-"""
-
 from decimal import Decimal
 
 import pytest

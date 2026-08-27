@@ -28,6 +28,10 @@ def create_app() -> FastAPI:
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
+    @app.get("/")
+    async def root() -> dict[str, str]:
+        return {"message": "Welcome to supercool-finances-accounts"}
+
     return app
 
 

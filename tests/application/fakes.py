@@ -59,10 +59,6 @@ class FakeLedgerRepository:
 
 
 class FakeUnitOfWork:
-    """Generic, mirrors the real (now shared) SqlUnitOfWork's shape:
-    only `.session` + commit/rollback, no repo attributes.
-    """
-
     def __init__(self) -> None:
         self.session = object()  # opaque placeholder, unused by fakes
         self.committed = False
@@ -80,10 +76,7 @@ class FakeUnitOfWork:
 
 
 def patch_use_case_repos(monkeypatch, use_case_module, accounts, ledger) -> None:
-    """Use cases construct SqlAccountRepository/SqlLedgerRepository by
-    name inline (design.md); patch those names in the use-case module's
-    namespace so unit tests exercise fakes instead of the real DB.
-    """
+    # patches module-level names because use cases import repos directly, not via injection
     monkeypatch.setattr(
         use_case_module, "SqlAccountRepository", lambda session, logger: accounts
     )
