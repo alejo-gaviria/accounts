@@ -1,4 +1,4 @@
-# account-balances
+# SuperCool Finances-accounts
 
 Critical financial microservice that owns customer account balances. Every balance is denominated in MXN. All mutations (credit, debit, transfer) are idempotent and recorded as immutable ledger entries.
 
