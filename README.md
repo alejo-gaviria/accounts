@@ -1,150 +1,242 @@
-# effex-accounts
+# account-balances
 
-Account balances microservice. Hexagonal `account_balance` module:
-domain owns the `Account` aggregate and immutable `LedgerEntry` rows;
-balance is a cached projection updated in the same DB transaction that
-appends the ledger row. Mutations (credit/debit/transfer) are owned by
-this service's own HTTP API, Postgres-backed, idempotent (via a
-required `Idempotency-Key` header), and concurrency-safe via
-pessimistic row locks (`SELECT ... FOR UPDATE`).
+Critical financial microservice that owns customer account balances. Every balance is denominated in MXN. All mutations (credit, debit, transfer) are idempotent and recorded as immutable ledger entries.
 
-See `.sdd/account-balances/design.md` for the full technical design
-(schema, concurrency protocol, API contract) and `.sdd/account-balances/spec.md`
-for the behavioral spec.
+---
 
-## Local dev
+## Setup
 
-Prerequisites: [uv](https://docs.astral.sh/uv/), Docker (with `docker compose`).
+**Prerequisites:** [uv](https://docs.astral.sh/uv/), Docker with Compose.
 
 ```bash
-# Install dependencies (creates .venv, reads uv.lock)
+# 1. Install dependencies
 uv sync
 
-# Start Postgres (dev service, port 5432)
-make up          # == docker compose up -d db
+# 2. Start Postgres (dev DB on port 5442)
+make up
 
-# Run migrations
-make migrate      # == uv run alembic upgrade head
+# 3. Apply migrations and create the restricted app role
+make migrate
 
-# Run the app
+# 4. Start the server
 uv run uvicorn src.infrastructure.main:app --reload
 ```
 
-Configuration is read from environment variables / a local `.env` file
-(see `.env.example`) via `src/config.py`. Defaults match
-`docker-compose.yml`'s `db` service, so a bare `uv sync && make up && make migrate`
-works out of the box with no `.env` file.
+The server starts at `http://localhost:8000`. Interactive docs at `http://localhost:8000/docs`.
 
-The initial migration also creates a restricted `accounts_app` Postgres
-role (INSERT/SELECT-only on `ledger_entries` — no UPDATE/DELETE,
-enforcing the append-only ledger invariant at the database level;
-INSERT/SELECT/UPDATE on `accounts`; no DDL rights at all). The running
-application always connects as `accounts_app`, never as the
-owner/migration role used to run Alembic.
+No `.env` file needed for local dev — defaults in `src/config.py` match `docker-compose.yml` out of the box.
 
-### Smoke-testing credit/debit/transfer
+---
 
-Credit/debit/transfer all operate on an existing account, so you need
-one to point them at. The easiest way is `POST /v1/accounts` — a
-**dev/test convenience endpoint, not a real account-onboarding flow**
-(no KYC, no customer linkage, it just inserts a row):
+## Authentication
 
-Every account is denominated in MXN — `POST /v1/accounts` has no
-`currency` field at all (see "Currency conversion" below):
+Every request requires an `X-API-Key` header.
+
+```
+X-API-Key: 00000000-0000-0000-0000-000000000000
+```
+
+> **Note:** This is a static v1/local-only placeholder. Replace with real auth before deploying.
+
+---
+
+## Endpoints
+
+### Create an account (dev convenience)
 
 ```bash
-curl -X POST http://localhost:8000/v1/accounts \
+curl -s -X POST http://localhost:8000/v1/accounts \
   -H "X-API-Key: 00000000-0000-0000-0000-000000000000" \
   -H "Content-Type: application/json" \
   -d '{"initial_balance": "100.00"}'
-# => 201 {"id": "<uuid>", "balance": "100.00", "currency": "MXN"}
-
-curl -X POST http://localhost:8000/v1/accounts/<uuid>/credit \
-  -H "X-API-Key: 00000000-0000-0000-0000-000000000000" \
-  -H "Idempotency-Key: smoke-1" \
-  -H "Content-Type: application/json" \
-  -d '{"amount": "10.00", "currency": "USD"}'
-# => 200 {"account_id": "<uuid>", "balance": "169.6000", "entry_id": "<uuid>"}
-# 10 USD credited at the static 16.96 MXN/USD rate -> balance
-# increases by 169.60 MXN, not 10. Omit "currency" (or send "MXN") for
-# a 1:1 credit with no conversion.
 ```
 
-**Fallback / alternative**: if you'd rather seed a row directly (e.g.
-to test with a specific known UUID, or against a DB where the app
-isn't running yet), connect with `psql` and insert manually:
+```json
+{"id": "f47ac10b-...", "balance": "100.00", "currency": "MXN"}
+```
+
+> This is a dev/test convenience — no KYC, no customer linkage. Use the returned `id` in the requests below.
+
+---
+
+### Get account balance
 
 ```bash
-psql postgresql://accounts:accounts@localhost:5442/accounts \
-  -c "INSERT INTO accounts (id, balance) VALUES (gen_random_uuid(), 100.00) RETURNING id;"
+curl -s http://localhost:8000/v1/accounts/<account_id>
 ```
 
-Both approaches land in the same `accounts` table — the API endpoint
-is just faster for routine local testing since it doesn't require a
-`psql` session.
+```json
+{"id": "f47ac10b-...", "balance": "100.00", "currency": "MXN"}
+```
 
-### Currency conversion
+No auth required for reads.
 
-Balances are canonically MXN. `credit`/`debit`/`transfer` accept a
-`currency` field (default `"MXN"`) for the request *amount* — not the
-account's own currency, since every account is MXN. Supported
-currencies and their hardcoded MXN rates
-(`application/services/exchange_rates.py`, `StaticExchangeRates` — a
-static table, no external API, by explicit design choice):
+---
+
+### Credit (add funds)
+
+Requires `Idempotency-Key` header — use any unique string per operation.
+
+```bash
+curl -s -X POST http://localhost:8000/v1/accounts/<account_id>/credit \
+  -H "X-API-Key: 00000000-0000-0000-0000-000000000000" \
+  -H "Idempotency-Key: my-unique-op-1" \
+  -H "Content-Type: application/json" \
+  -d '{"amount": "50.00", "currency": "MXN"}'
+```
+
+```json
+{"account_id": "f47ac10b-...", "balance": "150.00", "entry_id": "a1b2c3d4-..."}
+```
+
+Credit in USD (auto-converted to MXN at the static rate):
+
+```bash
+-d '{"amount": "10.00", "currency": "USD"}'
+# 10 USD × 16.96 = 169.60 MXN added
+```
+
+---
+
+### Debit (remove funds)
+
+Same structure as credit. Returns `409` if balance is insufficient.
+
+```bash
+curl -s -X POST http://localhost:8000/v1/accounts/<account_id>/debit \
+  -H "X-API-Key: 00000000-0000-0000-0000-000000000000" \
+  -H "Idempotency-Key: my-unique-op-2" \
+  -H "Content-Type: application/json" \
+  -d '{"amount": "30.00", "currency": "MXN"}'
+```
+
+```json
+{"account_id": "f47ac10b-...", "balance": "120.00", "entry_id": "b2c3d4e5-..."}
+```
+
+---
+
+### Transfer
+
+Moves funds atomically between two accounts. Both accounts are locked in ascending UUID order to prevent deadlocks.
+
+```bash
+curl -s -X POST http://localhost:8000/v1/transfers \
+  -H "X-API-Key: 00000000-0000-0000-0000-000000000000" \
+  -H "Idempotency-Key: my-unique-op-3" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "from_account_id": "f47ac10b-...",
+    "to_account_id":   "a1b2c3d4-...",
+    "amount": "25.00",
+    "currency": "MXN"
+  }'
+```
+
+```json
+{"transfer_id": "c3d4e5f6-...", "from_balance": "95.00", "to_balance": "125.00"}
+```
+
+---
+
+## Idempotency
+
+`credit`, `debit`, and `transfer` all require a `Idempotency-Key` header. Replaying the same key returns the original response — the operation is not re-executed.
+
+```bash
+# First call: applies the credit
+curl ... -H "Idempotency-Key: op-123" -d '{"amount": "50.00"}'
+# => 200, balance increases
+
+# Same key again: returns the same result, balance unchanged
+curl ... -H "Idempotency-Key: op-123" -d '{"amount": "50.00"}'
+# => 200, same entry_id, same balance
+```
+
+---
+
+## Currency conversion
+
+All balances are stored in MXN. The `currency` field on request body specifies the *input* amount's currency — it is converted to MXN before being applied.
 
 | Currency | MXN per 1 unit |
-|---|---|
-| MXN | 1 |
-| USD | 16.96 |
-| CAD | 12.22 |
-| COP | 0.00549 |
-| CNY | 2.52 |
+|----------|----------------|
+| MXN      | 1.00           |
+| USD      | 16.96          |
+| CAD      | 12.22          |
+| COP      | 0.00549        |
+| CNY      | 2.52           |
 
-A currency outside this table is rejected with `400
-{"error": {"code": "unsupported_currency", ...}}`. Every ledger entry
-records `original_amount`/`original_currency`/`fx_rate` alongside the
-MXN `amount` actually applied, so "what did the caller actually send"
-is always reconstructable from the immutable ledger.
+Unsupported currencies return `400 {"error": {"code": "unsupported_currency", ...}}`.
+
+The ledger records `original_amount`, `original_currency`, and `fx_rate` on every entry so the caller's original intent is always reconstructable.
+
+---
+
+## Error responses
+
+All errors follow the same shape:
+
+```json
+{"error": {"code": "<code>", "message": "<human-readable>"}}
+```
+
+| HTTP | Code | When |
+|------|------|------|
+| 400 | `invalid_amount` | Amount ≤ 0 |
+| 400 | `unsupported_currency` | Currency not in the rate table |
+| 400 | `missing_idempotency_key` | Header absent or blank |
+| 401 | `unauthorized` | Missing or wrong `X-API-Key` |
+| 404 | `unknown_account` | Account ID not found |
+| 409 | `insufficient_funds` | Debit/transfer exceeds balance |
+
+---
 
 ## Tests
 
 ```bash
-uv run pytest                       # domain + application (pure, no infra)
-make test                            # also brings up db-test and runs
-                                      # the full suite including
-                                      # @pytest.mark.integration /
-                                      # tests/e2e (needs a live db-test)
+# Fast: domain + application (pure, no infra)
+uv run pytest
+
+# Full suite including integration and E2E (needs Postgres)
+make test
 ```
 
-Test-database strategy: a separate `db-test` compose service (Postgres
-16, port 5433, tmpfs-backed so each run starts from empty) keeps
-integration/e2e tests fully isolated from the dev `db` service and its
-data. Integration and E2E tests self-skip (not fail) if `db-test` isn't
-reachable.
+`make test` brings up `db-test` (a separate Postgres on port 5433, tmpfs-backed, starts empty each run), runs migrations against it, then runs the full suite. Integration and E2E tests self-skip — not fail — if `db-test` is unreachable.
 
-## Container / deployment shape
+---
 
-`Dockerfile` builds a `python:3.12-slim` image (`uv sync --frozen --no-dev`,
-`CMD uvicorn src.infrastructure.main:app --host 0.0.0.0 --port 8000`). The AWS target
-shape (not provisioned by anything in this repo) is ECS/Fargate running
-that image against a managed RDS Postgres 16 instance, with
-`DATABASE_URL`/`APP_DB_PASSWORD` etc. injected via Secrets Manager.
+## Environment variables
 
-## Known risks (tracked, not yet resolved)
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | `postgresql+asyncpg://accounts:accounts@localhost:5442/accounts` | Migration/owner role connection |
+| `APP_DB_ROLE` | `accounts_app` | Restricted app role (INSERT/SELECT only on ledger) |
+| `APP_DB_PASSWORD` | `accounts_app` | Password for `APP_DB_ROLE` |
+| `API_KEY` | `00000000-0000-0000-0000-000000000000` | Static API key (v1 placeholder) |
 
-- **API-key auth is a v1/local-only placeholder.** `adapters/inbound/api/dependencies.py`'s
-  `require_api_key` compares a single static `X-API-Key` value
-  (`API_KEY` env var, default `00000000-0000-0000-0000-000000000000`)
-  in plain Python — no hashing, no rotation, no per-client scoping, no
-  rate limiting. **Do not deploy this anywhere other than local
-  development without replacing it** with real credential issuance
-  (JWT or another proper service-to-service auth mechanism).
-- Live-Postgres verification: `make up && make migrate && make test`
-  has been run end-to-end successfully (migration applies cleanly,
-  `accounts_app` grants are exactly as designed, full test suite
-  including `@pytest.mark.integration`/`tests/e2e` passes against a
-  real `db`/`db-test`), and the app has been booted with `uvicorn` and
-  smoke-tested live via `curl` (including `POST /v1/accounts` ->
-  `POST .../credit`). Re-verify after any change to the schema,
-  migration, or connection settings before trusting a given commit in
-  a shared environment.
+Copy `.env.example` to `.env` to override any of these.
+
+---
+
+## Make targets
+
+| Target | What it does |
+|--------|-------------|
+| `make up` | Start dev Postgres (`db` service, port 5442) |
+| `make down` | Stop and remove containers |
+| `make migrate` | Run `alembic upgrade head` against dev DB |
+| `make test` | Bring up `db-test`, run full test suite, tear down |
+
+---
+
+## Architecture notes
+
+- **Hexagonal (ports and adapters)**: domain has zero infrastructure imports. Application layer coordinates use cases. SQL adapters live in `adapters/outbound/`.
+- **Immutable ledger**: the `accounts_app` Postgres role has `UPDATE`/`DELETE` revoked on `ledger_entries` at the DB level. Balance is a cached projection updated in the same transaction that appends the ledger row — it is always rebuildable via `SUM(ledger_entries)`.
+- **Concurrency**: mutations acquire a `SELECT ... FOR UPDATE` row lock. Transfers lock both rows in ascending UUID order to avoid deadlocks.
+- **Dependency injection**: `dependency-injector` containers wire use cases. `SharedContainer` owns logger, session factory, and UoW; `AccountBalanceContainer` composes it.
+
+Full technical design: `.sdd/account-balances/design.md`
+Behavioral spec: `.sdd/account-balances/spec.md`
+AI usage log: `docs/PROMPTS.md`
